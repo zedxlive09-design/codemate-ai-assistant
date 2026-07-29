@@ -35,6 +35,23 @@ interface AppState {
   showSettings: boolean;
   showFileExplorer: boolean;
   showModelManager: boolean;
+  showTerminal: boolean;
+  showActivityPanel: boolean;
+  showConversationManager: boolean;
+  showSnippetsPanel: boolean;
+  showGitPanel: boolean;
+  showCodeEditor: boolean;
+  showVoiceInput: boolean;
+  showBookmarks: boolean;
+  showFloatingBar: boolean;
+  showThemeCustomizer: boolean;
+  showQuickActions: boolean;
+  showPluginManager: boolean;
+  showAISettings: boolean;
+  showModelDownloads: boolean;
+  showNotifications: boolean;
+  showStatsPanel: boolean;
+  showProfilePanel: boolean;
   
   // App Settings
   settings: AppSettings;
@@ -42,9 +59,11 @@ interface AppState {
   // Actions - Conversations
   createConversation: (title?: string) => string;
   deleteConversation: (id: string) => void;
+  deleteAllConversations: () => void;
   setActiveConversation: (id: string) => void;
   addMessage: (conversationId: string, message: Omit<Message, 'id' | 'timestamp'>) => void;
   updateMessage: (conversationId: string, messageId: string, content: string) => void;
+  importConversations: (conversations: Conversation[]) => void;
   
   // Actions - Generation
   setIsGenerating: (value: boolean) => void;
@@ -67,6 +86,28 @@ interface AppState {
   toggleSettings: () => void;
   toggleFileExplorer: () => void;
   toggleModelManager: () => void;
+  toggleTerminal: () => void;
+  toggleActivityPanel: () => void;
+  toggleConversationManager: () => void;
+  toggleSnippetsPanel: () => void;
+  toggleGitPanel: () => void;
+  toggleCodeEditor: () => void;
+  toggleVoiceInput: () => void;
+  toggleBookmarks: () => void;
+  toggleFloatingBar: () => void;
+  toggleThemeCustomizer: () => void;
+  toggleQuickActions: () => void;
+  togglePluginManager: () => void;
+  toggleAISettings: () => void;
+  toggleModelDownloads: () => void;
+  toggleNotifications: () => void;
+  toggleStatsPanel: () => void;
+  toggleProfilePanel: () => void;
+  
+  // Bookmarks
+  addBookmark: (conversationId: string, messageId: string) => void;
+  removeBookmark: (messageId: string) => void;
+  bookmarks: string[];
   
   // Actions - Settings
   updateSettings: (settings: Partial<AppSettings>) => void;
@@ -116,6 +157,25 @@ export const useStore = create<AppState>()(
       showSettings: false,
       showFileExplorer: false,
       showModelManager: false,
+      showTerminal: false,
+      showActivityPanel: false,
+      showConversationManager: false,
+      showSnippetsPanel: false,
+      showGitPanel: false,
+      showCodeEditor: false,
+      showVoiceInput: false,
+      showBookmarks: false,
+      showFloatingBar: true,
+      showThemeCustomizer: false,
+      showQuickActions: false,
+      showPluginManager: false,
+      showAISettings: false,
+  showModelDownloads: false,
+  showNotifications: false,
+  showStatsPanel: false,
+  showProfilePanel: false,
+      
+      bookmarks: [],
       
       settings: defaultSettings,
 
@@ -145,6 +205,13 @@ export const useStore = create<AppState>()(
               ? (filtered[0]?.id || null) 
               : state.activeConversationId,
           };
+        });
+      },
+
+      deleteAllConversations: () => {
+        set({
+          conversations: [],
+          activeConversationId: null,
         });
       },
 
@@ -244,10 +311,98 @@ export const useStore = create<AppState>()(
         set((state) => ({ showModelManager: !state.showModelManager }));
       },
 
+      toggleTerminal: () => {
+        set((state) => ({ showTerminal: !state.showTerminal }));
+      },
+
+      toggleActivityPanel: () => {
+        set((state) => ({ showActivityPanel: !state.showActivityPanel }));
+      },
+
+      toggleConversationManager: () => {
+        set((state) => ({ showConversationManager: !state.showConversationManager }));
+      },
+
+      importConversations: (importedConversations: Conversation[]) => {
+        set((state) => ({
+          conversations: [...importedConversations, ...state.conversations],
+        }));
+      },
+
       // Settings actions
       updateSettings: (newSettings: Partial<AppSettings>) => {
         set((state) => ({
           settings: { ...state.settings, ...newSettings },
+        }));
+      },
+
+      // Additional UI toggles
+      toggleSnippetsPanel: () => {
+        set((state) => ({ showSnippetsPanel: !state.showSnippetsPanel }));
+      },
+
+      toggleGitPanel: () => {
+        set((state) => ({ showGitPanel: !state.showGitPanel }));
+      },
+
+      toggleCodeEditor: () => {
+        set((state) => ({ showCodeEditor: !state.showCodeEditor }));
+      },
+
+      toggleVoiceInput: () => {
+        set((state) => ({ showVoiceInput: !state.showVoiceInput }));
+      },
+
+      toggleBookmarks: () => {
+        set((state) => ({ showBookmarks: !state.showBookmarks }));
+      },
+
+      toggleFloatingBar: () => {
+        set((state) => ({ showFloatingBar: !state.showFloatingBar }));
+      },
+
+      toggleThemeCustomizer: () => {
+        set((state) => ({ showThemeCustomizer: !state.showThemeCustomizer }));
+      },
+
+      toggleQuickActions: () => {
+        set((state) => ({ showQuickActions: !state.showQuickActions }));
+      },
+
+      togglePluginManager: () => {
+        set((state) => ({ showPluginManager: !state.showPluginManager }));
+      },
+
+      toggleAISettings: () => {
+        set((state) => ({ showAISettings: !state.showAISettings }));
+      },
+
+      toggleModelDownloads: () => {
+        set((state) => ({ showModelDownloads: !state.showModelDownloads }));
+      },
+
+      toggleNotifications: () => {
+        set((state) => ({ showNotifications: !state.showNotifications }));
+      },
+
+      toggleStatsPanel: () => {
+        set((state) => ({ showStatsPanel: !state.showStatsPanel }));
+      },
+
+      toggleProfilePanel: () => {
+        set((state) => ({ showProfilePanel: !state.showProfilePanel }));
+      },
+
+      // Bookmarks actions
+      addBookmark: (_conversationId: string, messageId: string) => {
+        set((state) => ({
+          bookmarks: [...state.bookmarks, messageId],
+        }));
+      },
+
+      removeBookmark: (messageId: string) => {
+        set((state) => ({
+          bookmarks: state.bookmarks.filter(id => id !== messageId),
         }));
       },
     }),
