@@ -1,0 +1,51 @@
+// CodeMate AI Assistant - Tauri Backend
+//
+// This module handles all backend operations for the offline AI assistant:
+// - Model loading and inference (via llama.cpp)
+// - File system operations
+// - Project analysis
+// - Terminal command execution
+
+mod commands;
+mod model;
+mod project;
+
+use tauri::Manager;
+
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_shell::init())
+        .invoke_handler(tauri::generate_handler![
+            // Model commands
+            commands::model::load_model,
+            commands::model::unload_model,
+            commands::model::is_model_loaded,
+            commands::model::generate,
+            commands::model::list_models,
+            // Project commands
+            commands::project::list_directory,
+            commands::project::analyze_project,
+            commands::project::search_code,
+            commands::project::get_file_stats,
+            // System commands
+            commands::system::get_system_info,
+            commands::system::execute_command,
+            commands::system::get_app_version,
+        ])
+        .setup(|app| {
+            // Initialize app state
+            app.manage(model::ModelState::default());
+            
+            #[cfg(debug_assertions)]
+            {
+                let window = app.get_webview_window("main").unwrap();
+                window.open_devtools();
+            }
+            
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
