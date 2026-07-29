@@ -2,6 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import { useToast } from './Toast';
 
+// Bash color codes (used in shell snippets)
+const RED = '\\033[0;31m';
+const GREEN = '\\033[0;32m';
+const YELLOW = '\\033[1;33m';
+const NC = '\\033[0m';
+
 interface Snippet {
   id: string;
   name: string;

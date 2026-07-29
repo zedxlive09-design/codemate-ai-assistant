@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../store/useStore';
+import { useToast } from './Toast';
 
 interface TerminalLine {
   id: string;
@@ -35,7 +36,8 @@ export default function TerminalPanel({ isOpen, onClose }: TerminalPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const terminalRef = useRef<HTMLDivElement>(null);
   
-  const { projectPath, showToast } = useStore();
+  const { projectPath } = useStore();
+  const { showToast } = useToast();
 
   // Auto-scroll to bottom
   useEffect(() => {

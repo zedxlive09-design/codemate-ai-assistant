@@ -55,8 +55,8 @@ export default function ChatArea() {
         <div className="flex items-center gap-3 text-xs text-dark-500">
           <span>{activeConversation.messages.length} messages</span>
           <span>•</span>
-          <time dateTime={activeConversation.updatedAt}>
-            {formatRelativeTime(new Date(activeConversation.updatedAt))}
+          <time dateTime={activeConversation.updatedAt instanceof Date ? activeConversation.updatedAt.toISOString() : String(activeConversation.updatedAt)}>
+            {formatRelativeTime(activeConversation.updatedAt instanceof Date ? activeConversation.updatedAt : new Date(activeConversation.updatedAt))}
           </time>
         </div>
       </div>

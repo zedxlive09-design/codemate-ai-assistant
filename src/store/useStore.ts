@@ -64,6 +64,13 @@ interface AppState {
   addMessage: (conversationId: string, message: Omit<Message, 'id' | 'timestamp'>) => void;
   updateMessage: (conversationId: string, messageId: string, content: string) => void;
   importConversations: (conversations: Conversation[]) => void;
+  addConversationBatch: (conversations: Array<{
+    id: string;
+    title: string;
+    messages: Array<{ role: string; content: string }>;
+    createdAt: Date;
+    updatedAt: Date;
+  }>) => void;
   
   // Actions - Generation
   setIsGenerating: (value: boolean) => void;
@@ -326,6 +333,18 @@ export const useStore = create<AppState>()(
       importConversations: (importedConversations: Conversation[]) => {
         set((state) => ({
           conversations: [...importedConversations, ...state.conversations],
+        }));
+      },
+
+      addConversationBatch: (newConversations: Array<{
+        id: string;
+        title: string;
+        messages: Array<{ role: string; content: string }>;
+        createdAt: Date;
+        updatedAt: Date;
+      }>) => {
+        set((state) => ({
+          conversations: [...newConversations as Conversation[], ...state.conversations],
         }));
       },
 

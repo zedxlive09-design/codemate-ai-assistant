@@ -85,7 +85,7 @@ export interface LanguageStats {
 // App settings
 export interface AppSettings {
   language: 'en' | 'ur' | 'both';
-  theme: 'dark' | 'light';
+  theme: string; // Extended to support custom themes: 'dark' | 'light' | 'midnight' | 'ocean' | 'forest'
   modelPath: string;
   projectsPath: string;
   autoSave: boolean;

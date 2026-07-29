@@ -14,6 +14,7 @@ const generateUsageStats = () => ({
   codeBlocksGenerated: 234,
   filesAnalyzed: 89,
   activeHours: 156,
+  avgMessagesPerConversation: 26.3,
 });
 
 const weeklyActivity = [

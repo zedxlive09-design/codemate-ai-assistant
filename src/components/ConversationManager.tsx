@@ -423,27 +423,3 @@ export default function ConversationManager({ isOpen, onClose }: ConversationMan
     </div>
   );
 }
-
-// Add batch import action to store
-declare module '../store/useStore' {
-  interface AppState {
-    addConversationBatch: (conversations: Array<{
-      id: string;
-      title: string;
-      messages: Array<{ role: string; content: string }>;
-      createdAt: Date;
-      updatedAt: Date;
-    }>) => void;
-  }
-}
-
-// Extend the store with batch import
-const originalCreate = useStore.getState;
-useStore.setState({
-  ...originalCreate(),
-  addConversationBatch: (newConversations) => {
-    useStore.setState((state) => ({
-      conversations: [...newConversations, ...state.conversations],
-    }));
-  },
-});

@@ -14,6 +14,7 @@ interface SplitViewProps {
     id: string;
     size: number;
     minSize?: number;
+    maxSize?: number;
     content: React.ReactNode;
     collapsible?: boolean;
   }>;
@@ -256,8 +257,8 @@ function ResizableDivider({
   className = '' 
 }: ResizableDividerProps) {
   const [isResizing, setIsResizing] = useState(false);
-  const startPos = useRef(0);
-  const startSize = useRef(0);
+  const startPosRef = useRef(0);
+  const startSizeRef = useRef(0);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -272,7 +273,9 @@ function ResizableDivider({
         ? e.clientX - startPosRef.current 
         : e.clientY - startPosRef.current;
       
-      const containerEl = e.currentTarget.parentElement?.parentElement;
+      // Use target instead of currentTarget for MouseEvent
+      const targetEl = e.target as HTMLElement;
+      const containerEl = targetEl.parentElement?.parentElement;
       if (!containerEl) return;
       
       const containerSize = direction === 'horizontal' 
@@ -297,11 +300,8 @@ function ResizableDivider({
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
-  };
-}, [isResizing, direction, onResize, size, min, max]);
-
-  const startPosRef = useRef(0);
-  const startSizeRef = useRef(0);
+    };
+  }, [isResizing, direction, onResize, size, min, max]);
 
   return (
     <div
@@ -409,4 +409,4 @@ export function CollapsiblePanel({
   );
 }
 
-export { SplitView as default, ThreeWaySplit, CollapsiblePanel };
+export { SplitView as default };

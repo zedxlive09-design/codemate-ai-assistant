@@ -24,7 +24,7 @@ export default function ContextMenu({ items, x, y, onClose, parentRef }: Context
   const [position, setPosition] = useState({ x, y });
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const submenuTimeoutRef = useRef<NodeJS.Timeout>();
+  const submenuTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Adjust position if menu goes off-screen
   useEffect(() => {
@@ -82,7 +82,9 @@ export default function ContextMenu({ items, x, y, onClose, parentRef }: Context
 
   // Handle submenu hover
   const handleItemHover = (itemId: string | null) => {
-    clearTimeout(submenuTimeoutRef.current);
+    if (submenuTimeoutRef.current) {
+      clearTimeout(submenuTimeoutRef.current);
+    }
     setActiveSubmenu(itemId);
   };
 

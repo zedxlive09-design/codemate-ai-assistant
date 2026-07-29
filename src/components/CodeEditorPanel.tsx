@@ -79,7 +79,7 @@ export default function CodeEditorPanel({ isOpen, onClose }: CodeEditorPanelProp
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lineCountRef = useRef<HTMLDivElement>(null);
   
-  const { selectedFile, fileContent, projectPath, showToast } = useStore();
+  const { selectedFile, fileContent, projectPath } = useStore();
   const toast = useToast();
   
   // Load content when selectedFile changes
