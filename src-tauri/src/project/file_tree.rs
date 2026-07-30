@@ -40,7 +40,7 @@ impl FileNode {
         }
     }
     
-    pub fn add_child(&mut self, child: FileNode) {
+    pub fn add_child(&mut self, mut child: FileNode) {
         if let Some(ref mut children) = self.children {
             child.depth = self.depth + 1;
             children.push(child);

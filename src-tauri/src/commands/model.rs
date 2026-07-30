@@ -11,8 +11,8 @@ use tauri::{AppHandle, Emitter, State};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use crate::model::{
-    ModelState, LoadedModel, InferenceSettings, LoadModelResult, ModelConfig, 
-    GenerationProgress, ModelInfo,
+    ModelState, InferenceSettings, LoadModelResult, ModelConfig, 
+    ModelInfo,
     load_gguf_model, create_loaded_model,
     generate_text_async, generate_text_streaming,
     scan_directory_for_models, get_default_model_dirs,
@@ -186,7 +186,7 @@ pub async fn generate_streaming(
     generate_text_streaming(&prompt, &settings, &model, move |progress| {
         if progress.is_error {
             let _ = app_clone.emit(EVENT_GENERATION_ERROR, serde_json::json!({
-                "message": progress.error_message.unwrap_or("Unknown error")
+                "message": progress.error_message.unwrap_or_else(|| "Unknown error".to_string())
             }));
         } else if progress.is_complete {
             let _ = app_clone.emit(EVENT_GENERATION_COMPLETE, serde_json::json!({
@@ -341,7 +341,7 @@ pub async fn check_ollama_available() -> Result<OllamaStatus, String> {
             
             Ok(OllamaStatus {
                 available: true,
-                version: version.and_then(|v| v.get("version").and_then(|v| v.as_str())).map(String::from),
+                version: version.and_then(|v| v.get("version").and_then(|v| v.as_str()).map(|s| s.to_string())),
                 error: None,
             })
         }
@@ -387,7 +387,7 @@ pub async fn get_inference_system_info() -> Result<InferenceSystemInfo, String> 
             .with_cpu(sysinfo::CpuRefreshKind::new())
     );
     sys.refresh_memory();
-    sys.refresh_cpu();
+    sys.refresh_cpu_all();
     
     let total_memory_gb = sys.total_memory() as f64 / (1024.0 * 1024.0 * 1024.0);
     let available_memory_gb = sys.available_memory() as f64 / (1024.0 * 1024.0 * 1024.0);
@@ -409,7 +409,7 @@ pub async fn get_inference_system_info() -> Result<InferenceSystemInfo, String> 
         canRun13b: available_memory_gb > 12.0,
         canRun34b: available_memory_gb > 24.0,
         canRun70b: available_memory_gb > 48.0,
-        ollamaAvailable: ollama_available,
+        ollama_available: ollama_available,
         backend: if ollama_available { "Ollama".to_string() } else { "None".to_string() },
     })
 }

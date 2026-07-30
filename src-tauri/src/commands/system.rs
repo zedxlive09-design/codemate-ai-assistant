@@ -5,9 +5,7 @@
 // - Executing terminal commands
 // - App version info
 
-use tauri::State;
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SystemInfo {
@@ -48,7 +46,7 @@ pub async fn get_system_info() -> Result<SystemInfo, String> {
         available_memory_mb: sys.available_memory() / 1024 / 1024,
         cpu_name: sys.cpus()
             .first()
-            .map(|c| c.brand_name().to_string())
+            .map(|c| c.brand().to_string())
             .unwrap_or_else(|| "Unknown".to_string()),
     })
 }
@@ -73,7 +71,11 @@ pub async fn execute_command(
     
     // Set working directory if provided
     if let Some(dir) = cwd {
-        cmd.current_dir(dir).map_err(|e| format!("Invalid directory: {}", e))?;
+        let path = std::path::Path::new(&dir);
+        if !path.exists() {
+            return Err(format!("Directory does not exist: {}", dir));
+        }
+        cmd.current_dir(path);
     }
     
     // Capture output with timeout for safety

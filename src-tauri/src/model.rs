@@ -9,9 +9,10 @@
 use std::sync::Mutex;
 use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
+use futures_util::StreamExt;
 
 /// Default Ollama API endpoint
-const OLLAMA_BASE_URL: &str = "http://localhost:11434";
+pub const OLLAMA_BASE_URL: &str = "http://localhost:11434";
 
 /// Main model state holder - stored in Tauri managed state
 #[derive(Default)]
@@ -245,7 +246,7 @@ struct OllamaGenerateRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     stream: Option<bool>,
     options: OllamaGenerateOptions,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     raw: Option<bool>,
 }
 
@@ -451,8 +452,8 @@ pub async fn generate_text_streaming(
             // Process streaming chunks
             let mut stream = response.bytes_stream();
             
-            while let Some(chunk) = stream.next().await {
-                match chunk {
+            while let Some(chunk_result) = stream.next().await {
+                match chunk_result {
                     Ok(bytes) => {
                         let text = String::from_utf8_lossy(&bytes);
                         
@@ -594,8 +595,8 @@ pub async fn pull_model(model_name: &str, mut on_progress: impl FnMut(String) + 
     
     let mut stream = response.bytes_stream();
     
-    while let Some(chunk) = stream.next().await {
-        if let Ok(bytes) = chunk {
+    while let Some(chunk_result) = stream.next().await {
+        if let Ok(bytes) = chunk_result {
             let text = String::from_utf8_lossy(&bytes);
             for line in text.lines() {
                 if let Ok(status) = serde_json::from_str::<serde_json::Value>(line) {
@@ -759,12 +760,11 @@ fn estimate_params_from_name(name: &str) -> String {
 
 /// Get available system memory in bytes
 fn get_available_memory_bytes() -> u64 {
-    match sysinfo::System::new_with_specifics(
+    let mut sys = sysinfo::System::new_with_specifics(
         sysinfo::RefreshKind::new().with_memory(sysinfo::MemoryRefreshKind::new())
-    ).memory() {
-        mem => mem.available(),
-        Err(_) => 16_000_000_000,
-    }
+    );
+    sys.refresh_memory();
+    sys.available_memory()
 }
 
 /// Calculate appropriate context length based on model size and available memory
