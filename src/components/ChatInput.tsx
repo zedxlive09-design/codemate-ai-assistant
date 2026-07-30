@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { useStore } from '../store/useStore';
 import { fileCommands, modelCommands } from '../lib/tauri';
+import type { InferenceSettings } from '../types';
 
 interface ChatInputProps {
   conversationId: string;
@@ -11,6 +12,7 @@ export default function ChatInput({ conversationId }: ChatInputProps) {
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
   const [isComposing, setIsComposing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   
   const {
     addMessage,
@@ -20,7 +22,6 @@ export default function ChatInput({ conversationId }: ChatInputProps) {
     selectedModelId,
     modelLoaded,
     inferenceSettings,
-    projectPath,
   } = useStore();
 
   // Auto-resize textarea
@@ -31,13 +32,22 @@ export default function ChatInput({ conversationId }: ChatInputProps) {
     }
   }, [message]);
 
-  // Handle send message
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
+  // Handle send message with real streaming generation
   const handleSend = async () => {
     if (!message.trim() || isGenerating || isComposing) return;
 
     // Check model loaded
     if (!modelLoaded || !selectedModelId) {
-      // Show alert or toast about loading model first
+      console.warn('No model loaded or selected');
       return;
     }
 
@@ -70,42 +80,106 @@ export default function ChatInput({ conversationId }: ChatInputProps) {
     const conv = state.conversations.find(c => c.id === conversationId);
     const assistantMessageId = conv!.messages[conv!.messages.length - 1].id;
 
+    // Create abort controller for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
-      await generateResponse(conversationId, assistantMessageId, userMessage);
-    } catch (error) {
-      console.error('Generation error:', error);
-      updateMessage(conversationId, assistantMessageId, 
-        `❌ **Error**: Failed to generate response.\n\n${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease check that the model is properly loaded.`
+      await generateResponseStreaming(
+        conversationId, 
+        assistantMessageId, 
+        userMessage,
+        abortController.signal
       );
+    } catch (error) {
+      // Check if this was an intentional abort
+      if (abortController.signal.aborted) {
+        // Get current message content and append stop message
+        const state = useStore.getState();
+        const conv = state.conversations.find(c => c.id === conversationId);
+        const currentMsg = conv?.messages.find(m => m.id === assistantMessageId);
+        const currentContent = currentMsg?.content || '';
+        updateMessage(conversationId, assistantMessageId, 
+          currentContent + '\n\n*Generation stopped*'
+        );
+      } else {
+        console.error('Generation error:', error);
+        updateMessage(conversationId, assistantMessageId, 
+          `❌ **Error**: Failed to generate response.\n\n${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease check that the model is properly loaded.`
+        );
+      }
     } finally {
+      if (abortControllerRef.current === abortController) {
+        abortControllerRef.current = null;
+      }
       setIsGenerating(false);
     }
   };
 
-  // Simulate generation (will be replaced with actual Tauri call)
-  const generateResponse = async (
+  /**
+   * Real streaming generation using Tauri backend
+   * This connects to the actual llama.cpp inference engine
+   */
+  const generateResponseStreaming = async (
     conversationId: string,
     messageId: string,
-    prompt: string
+    prompt: string,
+    signal: AbortSignal
   ) => {
-    const responses = [
-      `I understand you're asking about: **${prompt.slice(0, 60)}...**\n\nLet me help you with that!\n\n\`\`\`typescript\n// Example code for your request\nconst solution = "This is where I'd provide actual AI-generated code";\nconsole.log(solution);\n\`\`\`\n\n### Key Points:\n- **Analysis**: I've processed your query carefully\n- **Solution**: The approach above demonstrates the pattern\n- **Next Steps**: Let me know if you need modifications\n\n> 💡 **Tip**: Connect a local GGUF model for full AI-powered responses!`,
-      
-      `Great question! Let me break this down for you:\n\n## 📝 Analysis\n\nBased on your request, here's my understanding:\n\n### What You Need:\n| Priority | Item | Status |\n|---------|------|--------|\n| High | Core logic | ✅ Ready |\n| Medium | Error handling | ✅ Included |\n| Low | Optimization | 🔄 Pending |\n\n\`\`\`javascript\n// Implementation example\nfunction solveProblem(input) {\n  // Step 1: Validate input\n  if (!input) throw new Error('Input required');\n  \n  // Step 2: Process data\n  const result = processData(input);\n  \n  // Step 3: Return output\n  return { success: true, data: result };\n}\n\`\`\`\n\nWould you like me to elaborate on any part?`,
-      
-      `I'd be happy to help! 🔧\n\n## Recommended Approach\n\nHere's a step-by-step solution:\n\n1️⃣ **Understand Requirements**\n   - Define clear acceptance criteria\n   - Identify edge cases\n\n2️⃣ **Design Solution**\n   - Choose appropriate patterns\n   - Consider performance implications\n\n3️⃣ **Implement**\n   - Write clean, testable code\n   - Add comprehensive comments\n\n\`\`\`python\n# Example implementation\ndef main():\n    \"\"\"Main entry point.\"\"\"\n    print("Hello from CodeMate!")\n    \n    # Your implementation here\n    return True\n\nif __name__ == "__main__":\n    main()\n\`\`\`\n\n💡 **Note**: This is a demo response. Load a local model for real AI assistance!\n\n---\n\n*Generated by CodeMate - Your Offline AI Assistant*`
-    ];
-    
-    const response = responses[Math.floor(Math.random() * responses.length)];
-    
-    // Simulate streaming by adding words gradually
     let currentText = '';
-    const words = response.split(' ');
     
-    for (let i = 0; i < words.length; i++) {
-      currentText += (i > 0 ? ' ' : '') + words[i];
-      updateMessage(conversationId, messageId, currentText);
-      await new Promise(resolve => setTimeout(resolve, 25 + Math.random() * 15));
+    // Import event listeners dynamically to avoid issues
+    const { listen } = await import('@tauri-apps/api/event');
+    
+    // Set up event listeners for streaming tokens
+    const unlistenToken = await listen<{ token: string | null; text: string; tokensGenerated: number; tokensPerSecond: number }>(
+      'model:generation-token',
+      (event) => {
+        if (signal.aborted) return;
+        
+        currentText = event.payload.text;
+        updateMessage(conversationId, messageId, currentText);
+      }
+    );
+
+    const unlistenComplete = await listen<{ text: string; tokensGenerated: number; tokensPerSecond: number }>(
+      'model:generation-complete',
+      (event) => {
+        if (signal.aborted) return;
+        
+        currentText = event.payload.text;
+        updateMessage(conversationId, messageId, currentText);
+        
+        console.log(`Generation complete: ${event.payload.tokensGenerated} tokens at ${event.payload.tokensPerSecond.toFixed(1)} t/s`);
+      }
+    );
+
+    const unlistenError = await listen<{ message: string }>(
+      'model:generation-error',
+      (event) => {
+        throw new Error(event.payload.message);
+      }
+    );
+
+    try {
+      // Build inference settings from store
+      const settings: Partial<InferenceSettings> = {
+        temperature: inferenceSettings.temperature,
+        topP: inferenceSettings.topP,
+        topK: inferenceSettings.topK,
+        maxTokens: inferenceSettings.maxTokens,
+        repeatPenalty: inferenceSettings.repeatPenalty,
+        threads: inferenceSettings.threads,
+      };
+
+      // Call the streaming generation command
+      await modelCommands.generateStreaming(prompt, settings);
+      
+    } finally {
+      // Clean up all listeners
+      unlistenToken();
+      unlistenComplete();
+      unlistenError();
     }
   };
 
@@ -116,9 +190,22 @@ export default function ChatInput({ conversationId }: ChatInputProps) {
       handleSend();
     }
     
-    // Ctrl+Enter for new line when in single-line mode (optional)
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      // Allow default behavior - insert newline
+    // Escape to stop generation
+    if (e.key === 'Escape' && isGenerating) {
+      e.preventDefault();
+      handleStopGeneration();
+    }
+  };
+
+  // Stop current generation
+  const handleStopGeneration = async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    try {
+      await modelCommands.stopGeneration();
+    } catch (e) {
+      console.error('Failed to stop generation:', e);
     }
   };
 
@@ -207,32 +294,37 @@ export default function ChatInput({ conversationId }: ChatInputProps) {
               </svg>
             </button>
 
-            {/* Send button */}
-            <button
-              onClick={handleSend}
-              disabled={!message.trim() || isGenerating || !modelLoaded || isComposing}
-              className={`
-                p-2.5 rounded-xl transition-all duration-200 transform active:scale-95
-                ${message.trim() && !isGenerating && modelLoaded
-                  ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-md shadow-primary-600/30 hover:shadow-lg hover:from-primary-500 hover:to-primary-400'
-                  : 'bg-dark-700/80 text-dark-500 cursor-not-allowed'
-                }
-              `}
-              title="Send message (Enter)"
-            >
-              {isGenerating ? (
-                /* Loading spinner */
-                <svg className="w-[18px] h-[18px] animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            {/* Send / Stop button */}
+            {isGenerating ? (
+              /* Stop button */
+              <button
+                onClick={handleStopGeneration}
+                className="p-2.5 rounded-xl bg-red-600/90 text-white shadow-md shadow-red-600/30 hover:bg-red-500 hover:shadow-lg transition-all duration-200 transform active:scale-95"
+                title="Stop generation (Esc)"
+              >
+                <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <rect x="6" y="6" width="12" height="12" rx="1" />
                 </svg>
-              ) : (
-                /* Send icon */
+              </button>
+            ) : (
+              /* Send button */
+              <button
+                onClick={handleSend}
+                disabled={!message.trim() || !modelLoaded || isComposing}
+                className={`
+                  p-2.5 rounded-xl transition-all duration-200 transform active:scale-95
+                  ${message.trim() && modelLoaded
+                    ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-md shadow-primary-600/30 hover:shadow-lg hover:from-primary-500 hover:to-primary-400'
+                    : 'bg-dark-700/80 text-dark-500 cursor-not-allowed'
+                  }
+                `}
+                title="Send message (Enter)"
+              >
                 <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
-              )}
-            </button>
+              </button>
+            )}
           </div>
         </div>
 
@@ -242,7 +334,7 @@ export default function ChatInput({ conversationId }: ChatInputProps) {
           <div className="flex items-center gap-3 text-xs text-dark-600">
             {modelLoaded ? (
               <span className="flex items-center gap-1.5 text-emerald-500/70">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 Model ready
               </span>
             ) : (
@@ -253,6 +345,16 @@ export default function ChatInput({ conversationId }: ChatInputProps) {
             )}
             
             <span className="hidden sm:inline">Enter to send • Shift+Enter for new line</span>
+            
+            {isGenerating && (
+              <span className="flex items-center gap-1.5 text-primary-400/70">
+                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Generating...
+              </span>
+            )}
           </div>
 
           {/* Right side settings preview */}

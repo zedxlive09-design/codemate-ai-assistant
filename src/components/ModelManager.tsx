@@ -111,7 +111,7 @@ export default function ModelManager({ onClose }: ModelManagerProps) {
   const handleUnloadModel = async () => {
     try {
       await modelCommands.unloadModel();
-      setSelectedModel(null);
+      setSelectedModel('');
       setModelLoaded(false);
     } catch (err) {
       console.error('Failed to unload model:', err);

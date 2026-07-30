@@ -168,7 +168,7 @@ export default function DragDropFileUpload({
     setIsDragging(false);
 
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFiles(e.dataTransfer.files);
+      handleFiles(Array.from(e.dataTransfer.files));
     }
   }, [handleFiles]);
 
@@ -178,7 +178,7 @@ export default function DragDropFileUpload({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      handleFiles(e.target.files);
+      handleFiles(Array.from(e.target.files));
     }
   };
 

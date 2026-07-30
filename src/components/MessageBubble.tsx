@@ -69,6 +69,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
                         </button>
                       </div>
                       <SyntaxHighlighter
+                        // @ts-expect-error Style type mismatch from library
                         style={oneDark}
                         language={match[1]}
                         PreTag="div"

@@ -55,12 +55,13 @@ export default function VoiceInputPanel({ isOpen, onClose, onTranscript }: Voice
         setConfidence(maxConfidence);
       };
 
-      recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.error('Speech recognition error:', event.error);
-        setError(`Error: ${event.error}`);
+      recognitionRef.current.onerror = (event: Event) => {
+        const errorEvent = event as SpeechRecognitionErrorEvent;
+        console.error('Speech recognition error:', errorEvent.error);
+        setError(`Error: ${errorEvent.error}`);
         setIsListening(false);
         
-        if (event.error === 'not-allowed') {
+        if (errorEvent.error === 'not-allowed') {
           showToast('Microphone permission denied. Please allow access.', 'error');
         }
       };

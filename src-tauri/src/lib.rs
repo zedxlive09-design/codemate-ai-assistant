@@ -18,30 +18,42 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
-            // Model commands
+            // === MODEL COMMANDS ===
             commands::model::load_model,
             commands::model::unload_model,
             commands::model::is_model_loaded,
+            commands::model::get_loaded_model_info,
             commands::model::generate,
+            commands::model::generate_streaming,
+            commands::model::stop_generation,
             commands::model::list_models,
-            // Project commands
+            commands::model::list_models_in_directory,
+            commands::model::get_model_directories,
+            commands::model::ensure_model_directory,
+            commands::model::validate_model_file,
+            commands::model::get_inference_system_info,
+            // === PROJECT COMMANDS ===
             commands::project::list_directory,
             commands::project::analyze_project,
             commands::project::search_code,
             commands::project::get_file_stats,
-            // System commands
+            // === SYSTEM COMMANDS ===
             commands::system::get_system_info,
             commands::system::execute_command,
             commands::system::get_app_version,
         ])
         .setup(|app| {
-            // Initialize app state
+            // Initialize app state with model manager
             app.manage(model::ModelState::default());
+            
+            // Log startup info
+            log::info!(target: "app", "CodeMate AI Assistant starting up...");
             
             #[cfg(debug_assertions)]
             {
-                let window = app.get_webview_window("main").unwrap();
-                window.open_devtools();
+                if let Some(window) = app.get_webview_window("main") {
+                    window.open_devtools();
+                }
             }
             
             Ok(())

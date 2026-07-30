@@ -279,7 +279,7 @@ export default function NotificationCenter({ isOpen, onClose }: NotificationCent
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                notification.action.onClick();
+                                notification.action?.onClick();
                               }}
                               className="px-2 py-0.5 text-[10px] bg-dark-700/50 hover:bg-dark-700 rounded text-dark-300 hover:text-white transition-colors"
                             >

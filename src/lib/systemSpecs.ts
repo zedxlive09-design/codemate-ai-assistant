@@ -81,7 +81,7 @@ function parseTauriSystemInfo(info: any): SystemSpecs {
     totalMemoryMB: totalMemMB,
     availableMemoryMB: availMemMB,
     totalMemoryGB: Math.round(totalMemMB / 1024),
-    availableMemoryGB: Math.round(availMB / 1024),
+    availableMemoryGB: Math.round(availMemMB / 1024),
     performanceScore: 'medium',
     performanceIndex: 50,
     maxRecommendedParams: '7B',
@@ -159,7 +159,7 @@ function calculatePerformance(specs: SystemSpecs): void {
   // Memory scoring (0-40 points)
   if (specs.totalMemoryGB >= 32) score += 40;
   else if (specs.totalMemoryGB >= 16) score += 32;
-  else if (specs.totalGB >= 8) score += 24;
+  else if (specs.totalMemoryGB >= 8) score += 24;
   else if (specs.totalMemoryGB >= 4) score += 15;
   else score += 8;
   
@@ -215,13 +215,13 @@ function setDefaultRecommendation(specs: SystemSpecs): void {
       specs.recommendedModel = 'llama-3-70b-q4'; // Can run large models
       break;
     case 'high':
-      specs.recommendedModel = 'mixtral-8x7b-q4' || 'llama-3-8b-q5';
+      specs.recommendedModel = 'mixtral-8x7b-q4';
       break;
     case 'medium':
       specs.recommendedModel = 'llama-3-8b-q4';
       break;
     case 'low':
-      specs.recommendedModel = 'phi-3-mini-q4' || 'gemma-2b-it-q4';
+      specs.recommendedModel = 'phi-3-mini-q4';
       break;
   }
 }

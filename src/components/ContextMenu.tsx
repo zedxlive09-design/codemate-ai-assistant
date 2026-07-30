@@ -137,7 +137,7 @@ export default function ContextMenu({ items, x, y, onClose, parentRef }: Context
             {hasChildren && activeSubmenu === item.id && (
               <div
                 className="absolute left-full top-0 ml-1 context-menu scale-in origin-top-left"
-                onMouseEnter={() => clearTimeout(submenuTimeoutRef.current)}
+                onMouseEnter={() => { if (submenuTimeoutRef.current) clearTimeout(submenuTimeoutRef.current); }}
                 onMouseLeave={() => handleItemHover(null)}
               >
                 {(item.children || []).map((child, childIndex) => 

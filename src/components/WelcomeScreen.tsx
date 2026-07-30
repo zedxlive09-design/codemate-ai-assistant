@@ -259,5 +259,3 @@ function getUrduTitle(title: string): string {
   };
   return urduMap[title] || '';
 }
-
-export default WelcomeScreen;

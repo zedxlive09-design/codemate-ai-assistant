@@ -17,29 +17,37 @@ declare module 'react-syntax-highlighter' {
 }
 
 declare module 'react-syntax-highlighter/dist/esm/styles/prism' {
-  const style: Record<string, any>;
-  export default as prism;
+  const prism: Record<string, any>;
+  export default prism;
 }
 
 declare module 'react-syntax-highlighter/dist/esm/styles/vs-dark' {
   const vsDark: Record<string, any>;
-  export default as vsDark;
+  export default vsDark;
 }
 
 declare module 'react-syntax-highlighter/dist/esm/styles/github-dark' {
   const githubDark: Record<string, any>;
-  export default as githubDark;
+  export default githubDark;
 }
 
 declare module 'react-syntax-highlighter/dist/esm/styles/dracula' {
   const dracula: Record<string, any>;
-  export default as dracula;
+  export default dracula;
 }
 
 // Tauri APIs (backup declarations)
 declare module '@tauri-apps/api/core' {
   export function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T>;
   export function listen<T>(event: string, handler: (event: { payload: T }) => void): Promise<() => void>;
+  export function emit(event: string, payload?: unknown): Promise<void>;
+}
+
+declare module '@tauri-apps/api/event' {
+  interface UnlistenFn {
+    (): Promise<void>;
+  }
+  export function listen<T>(event: string, handler: (event: { payload: T; id: number }) => void): Promise<UnlistenFn>;
   export function emit(event: string, payload?: unknown): Promise<void>;
 }
 
@@ -94,6 +102,11 @@ interface SpeechRecognitionAlternative {
   confidence: number;
 }
 
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message: string;
+}
+
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;
   interimResults: boolean;
@@ -104,7 +117,7 @@ interface SpeechRecognition extends EventTarget {
   onstart: (() => void) | null;
   start(): void;
   stop(): void;
-  abort(): void();
+  abort(): void;
 }
 
 interface SpeechRecognitionConstructor {
@@ -117,4 +130,6 @@ declare var SpeechRecognition: SpeechRecognitionConstructor;
 interface Window {
   SpeechRecognition: SpeechRecognitionConstructor;
   webkitSpeechRecognition: SpeechRecognitionConstructor;
+  // Tauri global
+  readonly __TAURI__?: unknown;
 }

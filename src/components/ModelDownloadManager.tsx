@@ -421,12 +421,13 @@ export default function ModelDownloadManager({ isOpen, onClose, onSelectModel }:
       // In Tauri, save to file system
       if (window.__TAURI__) {
         const { writeFile, mkdir } = await import('@tauri-apps/plugin-fs');
-        const { join } = await import('@tauri-apps/api/path');
+        const { join, appDataDir: getAppDataDir } = await import('@tauri-apps/api/path');
         
-        const appDataDir = await join(await appDataDir(), 'models');
-        await mkdir(appDataDir, { recursive: true });
+        const appDataDirPath = await getAppDataDir();
+        const modelsDir = await join(appDataDirPath, 'models');
+        await mkdir(modelsDir, { recursive: true });
         
-        const filePath = await join(appDataDir, `${model.id}.gguf`);
+        const filePath = await join(modelsDir, `${model.id}.gguf`);
         await writeFile(filePath, allChunks);
         
         showToast(`${model.name} saved to ${filePath}`, 'success');

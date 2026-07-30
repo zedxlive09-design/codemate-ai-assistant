@@ -2,13 +2,67 @@
  * Tauri Command Bridge
  * 
  * This module provides type-safe wrappers for all Tauri backend commands.
- * The actual implementation is in src-tauri/src/main.rs (Rust)
+ * The actual implementation is in src-tauri/src/ (Rust)
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeTextFile, exists, mkdir } from '@tauri-apps/plugin-fs';
 import type { ProjectFile, ModelConfig, InferenceSettings, ProjectAnalysis } from '../types';
+
+// ============================================================
+// TYPES FOR STREAMING
+// ============================================================
+
+export interface GenerationTokenEvent {
+  token: string | null;
+  text: string;
+  tokensGenerated: number;
+  tokensPerSecond: number;
+}
+
+export interface GenerationCompleteEvent {
+  text: string;
+  tokensGenerated: number;
+  tokensPerSecond: number;
+}
+
+export interface GenerationErrorEvent {
+  message: string;
+}
+
+export interface ModelInfo {
+  name: string;
+  parameters: string;
+  contextLength: number;
+  sizeBytes: number;
+  quantization: string;
+}
+
+export interface ModelValidationResult {
+  valid: boolean;
+  error?: string;
+  modelInfo?: ModelInfo;
+}
+
+export interface InferenceSystemInfo {
+  totalMemoryGb: number;
+  availableMemoryGb: number;
+  cpuCores: number;
+  cpuName: string;
+  recommendedMaxParameters: string;
+  canRun7b: boolean;
+  canRun13b: boolean;
+  canRun34b: boolean;
+  canRun70b: boolean;
+}
+
+export interface LoadModelResult {
+  success: boolean;
+  message: string;
+  modelInfo?: ModelInfo;
+}
 
 // ============================================================
 // MODEL COMMANDS - LLM Inference Operations
@@ -16,9 +70,9 @@ import type { ProjectFile, ModelConfig, InferenceSettings, ProjectAnalysis } fro
 
 export const modelCommands = {
   /**
-   * Load a GGUF model into memory
+   * Load a GGUF model into memory with full validation
    */
-  loadModel: async (modelPath: string): Promise<{ success: boolean; message: string }> => {
+  loadModel: async (modelPath: string): Promise<LoadModelResult> => {
     return invoke('load_model', { modelPath });
   },
 
@@ -37,7 +91,14 @@ export const modelCommands = {
   },
 
   /**
-   * Generate completion from the model
+   * Get info about loaded model
+   */
+  getLoadedModelInfo: async (): Promise<ModelInfo | null> => {
+    return invoke('get_loaded_model_info');
+  },
+
+  /**
+   * Generate completion (non-streaming)
    */
   generate: async (
     prompt: string,
@@ -47,42 +108,100 @@ export const modelCommands = {
   },
 
   /**
-   * Stream generation with callback for each token
+   * Stream generation - emits events for each token
+   * Listen to 'model:generation-token', 'model:generation-complete', 'model:generation-error'
    */
-  generateStream: async (
+  generateStreaming: async (
     prompt: string,
-    onToken: (token: string) => void,
     settings?: Partial<InferenceSettings>
   ): Promise<string> => {
-    return invoke('generate_stream', { 
+    return invoke('generate_streaming', { 
       prompt, 
       settings: settings || {} 
-    }, {
-      // @ts-expect-error Tauri event listener
-      onEvent: (event) => {
-        if (event.type === 'token') {
-          onToken(event.payload);
-        }
-      }
     });
   },
 
   /**
-   * Get available models from models directory
+   * Stop current generation
+   */
+  stopGeneration: async (): Promise<void> => {
+    return invoke('stop_generation');
+  },
+
+  /**
+   * Get available models from default directories
    */
   listModels: async (): Promise<ModelConfig[]> => {
     return invoke('list_models');
   },
 
   /**
-   * Download a model from URL (for initial setup)
+   * List models in specific directory
    */
-  downloadModel: async (
-    url: string,
-    destination: string,
-    onProgress?: (progress: number) => void
-  ): Promise<{ success: boolean; path: string }> => {
-    return invoke('download_model', { url, destination });
+  listModelsInDirectory: async (dir: string): Promise<ModelConfig[]> => {
+    return invoke('list_models_in_directory', { dir });
+  },
+
+  /**
+   * Get default model directories
+   */
+  getModelDirectories: async (): Promise<string[]> => {
+    return invoke('get_model_directories');
+  },
+
+  /**
+   * Ensure model directory exists
+   */
+  ensureModelDirectory: async (): Promise<string> => {
+    return invoke('ensure_model_directory');
+  },
+
+  /**
+   * Validate a GGUF model file
+   */
+  validateModelFile: async (path: string): Promise<ModelValidationResult> => {
+    return invoke('validate_model_file', { path });
+  },
+
+  /**
+   * Get system info relevant for inference
+   */
+  getInferenceSystemInfo: async (): Promise<InferenceSystemInfo> => {
+    return invoke('get_inference_system_info');
+  },
+};
+
+// ============================================================
+// EVENT LISTENERS FOR STREAMING
+// ============================================================
+
+export const modelEvents = {
+  /**
+   * Listen for generation token events
+   */
+  onGenerationToken: (callback: (event: GenerationTokenEvent) => void): Promise<UnlistenFn> => {
+    return listen<GenerationTokenEvent>('model:generation-token', (event) => callback(event.payload));
+  },
+
+  /**
+   * Listen for generation complete event
+   */
+  onGenerationComplete: (callback: (event: GenerationCompleteEvent) => void): Promise<UnlistenFn> => {
+    return listen<GenerationCompleteEvent>('model:generation-complete', (event) => callback(event.payload));
+  },
+
+  /**
+   * Listen for generation error event
+   */
+  onGenerationError: (callback: (event: GenerationErrorEvent) => void): Promise<UnlistenFn> => {
+    return listen<GenerationErrorEvent>('model:generation-error', (event) => callback(event.payload));
+  },
+
+  /**
+   * Listen for model status changes (loaded/unloaded)
+   */
+  onModelStatusChanged: (callback: (event: { loaded: boolean; model: ModelInfo | null }) => void): Promise<UnlistenFn> => {
+    return listen('model:status-changed', (event) => callback(event.payload as { loaded: boolean; model: ModelInfo | null }));
   },
 };
 
@@ -253,6 +372,7 @@ export const appCommands = {
 
 export default {
   model: modelCommands,
+  events: modelEvents,
   file: fileCommands,
   project: projectCommands,
   terminal: terminalCommands,

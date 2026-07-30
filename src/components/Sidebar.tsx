@@ -2,6 +2,28 @@ import React from 'react';
 import { useStore } from '../store/useStore';
 import { fileCommands } from '../lib/tauri';
 
+// Format date for display
+function formatDate(date: Date | string | number): string {
+  const d = new Date(date);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  
+  // Show actual date for older
+  return d.toLocaleDateString(undefined, { 
+    month: 'short', 
+    day: 'numeric',
+    year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+  });
+}
+
 export default function Sidebar() {
   const {
     conversations,
@@ -176,7 +198,7 @@ function ConversationItem({
   onSelect,
   onDelete,
 }: {
-  conversation: typeof import('../store/useStore').State extends { conversations: infer T } ? T : any;
+  conversation: any; // Conversation type from store
   isActive: boolean;
   index: number;
   onSelect: () => void;
@@ -189,7 +211,7 @@ function ConversationItem({
     : 'No messages yet';
   
   // Count user vs assistant messages
-  const userMessageCount = conversation.messages.filter(m => m.role === 'user').length;
+  const userMessageCount = conversation.messages.filter((m: any) => m.role === 'user').length;
 
   return (
     <div

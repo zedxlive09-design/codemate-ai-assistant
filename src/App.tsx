@@ -1,32 +1,32 @@
 import React, { useEffect, useCallback, useState } from 'react';
-import Sidebar from './Sidebar';
-import ChatArea from './ChatArea';
-import FileExplorer from './FileExplorer';
-import SettingsPanel from './SettingsPanel';
-import ModelManager from './ModelManager';
-import CommandPalette from './CommandPalette';
-import KeyboardShortcuts from './KeyboardShortcuts';
-import TerminalPanel from './TerminalPanel';
-import ActivityPanel from './ActivityPanel';
-import ConversationManager from './ConversationManager';
-import FloatingBar from './FloatingBar';
-import SnippetsPanel from './SnippetsPanel';
-import GitPanel from './GitPanel';
-import CodeEditorPanel from './CodeEditorPanel';
-import VoiceInputPanel from './VoiceInputPanel';
-import BookmarkManager from './BookmarkManager';
-import ThemeCustomizer from './ThemeCustomizer';
-import QuickActionsPanel from './QuickActionsPanel';
-import PluginManager from './PluginManager';
-import AISettingsPanel from './AISettingsPanel';
-import ModelDownloadManager from './ModelDownloadManager';
-import NotificationCenter from './NotificationCenter';
-import StatsDashboard from './StatsDashboard';
-import ProfilePanel from './ProfilePanel';
-import { ToastProvider } from './Toast';
+import Sidebar from './components/Sidebar';
+import ChatArea from './components/ChatArea';
+import FileExplorer from './components/FileExplorer';
+import SettingsPanel from './components/SettingsPanel';
+import ModelManager from './components/ModelManager';
+import CommandPalette from './components/CommandPalette';
+import KeyboardShortcuts from './components/KeyboardShortcuts';
+import TerminalPanel from './components/TerminalPanel';
+import ActivityPanel from './components/ActivityPanel';
+import ConversationManager from './components/ConversationManager';
+import FloatingBar from './components/FloatingBar';
+import SnippetsPanel from './components/SnippetsPanel';
+import GitPanel from './components/GitPanel';
+import CodeEditorPanel from './components/CodeEditorPanel';
+import VoiceInputPanel from './components/VoiceInputPanel';
+import BookmarkManager from './components/BookmarkManager';
+import ThemeCustomizer from './components/ThemeCustomizer';
+import QuickActionsPanel from './components/QuickActionsPanel';
+import PluginManager from './components/PluginManager';
+import AISettingsPanel from './components/AISettingsPanel';
+import ModelDownloadManager from './components/ModelDownloadManager';
+import NotificationCenter from './components/NotificationCenter';
+import StatsDashboard from './components/StatsDashboard';
+import ProfilePanel from './components/ProfilePanel';
+import { ToastProvider } from './components/Toast';
 import { useStore } from './store/useStore';
-import { useCommandPalette } from './CommandPalette';
-import { useKeyboardShortcuts } from './KeyboardShortcuts';
+import { useCommandPalette } from './components/CommandPalette';
+import { useKeyboardShortcuts } from './components/KeyboardShortcuts';
 
 export default function App() {
   const { 
@@ -428,52 +428,52 @@ export default function App() {
               )}
               {showSettings && (
                 <div className="m-2 glass-card aurora-border">
-                  <SettingsPanel />
+                  <SettingsPanel onClose={() => toggleSettings()} />
                 </div>
               )}
               {showModelManager && (
                 <div className="m-2 glass-card aurora-border">
-                  <ModelManager />
+                  <ModelManager onClose={() => toggleModelManager()} />
                 </div>
               )}
               {showTerminal && (
                 <div className="m-2 glass-card aurora-border">
-                  <TerminalPanel />
+                  <TerminalPanel isOpen={showTerminal} onClose={() => toggleTerminal()} />
                 </div>
               )}
               {showActivityPanel && (
                 <div className="m-2 glass-card aurora-border">
-                  <ActivityPanel />
+                  <ActivityPanel isOpen={showActivityPanel} onClose={() => toggleActivityPanel()} />
                 </div>
               )}
               {showConversationManager && (
                 <div className="m-2 glass-card aurora-border">
-                  <ConversationManager />
+                  <ConversationManager isOpen={showConversationManager} onClose={() => toggleConversationManager()} />
                 </div>
               )}
               {showSnippetsPanel && (
                 <div className="m-2 glass-card aurora-border">
-                  <SnippetsPanel />
+                  <SnippetsPanel isOpen={showSnippetsPanel} onClose={() => toggleSnippetsPanel()} onInsert={(code) => console.log('Insert snippet:', code)} />
                 </div>
               )}
               {showGitPanel && (
                 <div className="m-2 glass-card aurora-border">
-                  <GitPanel />
+                  <GitPanel isOpen={showGitPanel} onClose={() => toggleGitPanel()} />
                 </div>
               )}
               {showCodeEditor && (
                 <div className="m-2 glass-card aurora-border">
-                  <CodeEditorPanel />
+                  <CodeEditorPanel isOpen={showCodeEditor} onClose={() => toggleCodeEditor()} />
                 </div>
               )}
               {showVoiceInput && (
                 <div className="m-2 glass-card aurora-border">
-                  <VoiceInputPanel onTranscript={handleVoiceTranscript} />
+                  <VoiceInputPanel isOpen={showVoiceInput} onClose={() => toggleVoiceInput()} onTranscript={handleVoiceTranscript} />
                 </div>
               )}
               {showBookmarks && (
                 <div className="m-2 glass-card aurora-border">
-                  <BookmarkManager />
+                  <BookmarkManager isOpen={showBookmarks} onClose={() => toggleBookmarks()} />
                 </div>
               )}
             </div>
@@ -481,7 +481,7 @@ export default function App() {
         </div>
 
         {/* Floating Action Bar */}
-        <FloatingBar />
+        <FloatingBar onAction={(action) => console.log('Floating bar action:', action)} />
 
         {/* Modals */}
         <CommandPalette isOpen={isPaletteOpen} onClose={() => setIsPaletteOpen(false)} />
