@@ -368,9 +368,17 @@ This is a **demo response** - I'm simulating what the AI would say.
 
   // Attach file
   const handleAttachFile = async () => {
-    const path = await fileCommands.selectFile();
-    if (path && !attachedFiles.includes(path)) {
-      setAttachedFiles([...attachedFiles, path]);
+    try {
+      const path = await fileCommands.selectFile();
+      if (path && !attachedFiles.includes(path)) {
+        setAttachedFiles([...attachedFiles, path]);
+      }
+    } catch (e) {
+      console.warn('Dialog failed:', e);
+      const path = prompt('Enter file path:');
+      if (path && !attachedFiles.includes(path)) {
+        setAttachedFiles([...attachedFiles, path]);
+      }
     }
   };
 

@@ -119,23 +119,41 @@ export default function ModelManager({ onClose }: ModelManagerProps) {
   };
 
   const handleSelectModelFile = async () => {
-    const path = await fileCommands.selectFile([
-      { name: 'GGUF Models', extensions: ['gguf'] },
-      { name: 'All Files', extensions: ['*'] },
-    ]);
-    
-    if (path) {
-      // Extract model info from path
-      const filename = path.split('/').pop() || '';
-      handleLoadModel(path, filename);
+    try {
+      const path = await fileCommands.selectFile([
+        { name: 'GGUF Models', extensions: ['gguf'] },
+        { name: 'All Files', extensions: ['*'] },
+      ]);
+      
+      if (path) {
+        // Extract model info from path
+        const filename = path.split('/').pop() || '';
+        handleLoadModel(path, filename);
+      }
+    } catch (e) {
+      console.warn('Dialog failed:', e);
+      // Fallback
+      const path = prompt('Enter model path:');
+      if (path) {
+        handleLoadModel(path, path.split('/').pop() || path);
+      }
     }
   };
 
   const handleSetModelDirectory = async () => {
-    const dir = await fileCommands.selectFolder();
-    if (dir) {
-      updateSettings({ modelPath: dir });
-      await loadAvailableModels();
+    try {
+      const dir = await fileCommands.selectFolder();
+      if (dir) {
+        updateSettings({ modelPath: dir });
+        await loadAvailableModels();
+      }
+    } catch (e) {
+      console.warn('Dialog failed:', e);
+      const dir = prompt('Enter model directory path:');
+      if (dir) {
+        updateSettings({ modelPath: dir });
+        await loadAvailableModels();
+      }
     }
   };
 
