@@ -96,7 +96,7 @@ pub async fn unload_model(
     
     let _ = app.emit(EVENT_MODEL_STATUS_CHANGED, serde_json::json!({
         "loaded": false,
-        "model": null::<serde_json::Value>
+        "model": serde_json::Value::Null
     }));
     
     log::info!(target: "command", "Model unloaded");
