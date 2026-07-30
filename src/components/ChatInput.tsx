@@ -45,13 +45,7 @@ export default function ChatInput({ conversationId }: ChatInputProps) {
   const handleSend = async () => {
     if (!message.trim() || isGenerating || isComposing) return;
 
-    // Check model loaded
-    if (!modelLoaded || !selectedModelId) {
-      console.warn('No model loaded or selected');
-      return;
-    }
-
-    // Add user message
+    // Add user message (works even in demo mode)
     addMessage(conversationId, {
       role: 'user',
       content: message.trim(),
@@ -85,12 +79,23 @@ export default function ChatInput({ conversationId }: ChatInputProps) {
     abortControllerRef.current = abortController;
 
     try {
-      await generateResponseStreaming(
-        conversationId, 
-        assistantMessageId, 
-        userMessage,
-        abortController.signal
-      );
+      if (modelLoaded && selectedModelId) {
+        // REAL MODE: Use actual llama.cpp inference
+        await generateResponseStreaming(
+          conversationId, 
+          assistantMessageId, 
+          userMessage,
+          abortController.signal
+        );
+      } else {
+        // DEMO MODE: Simulated response when no model loaded
+        await generateDemoResponse(
+          conversationId,
+          assistantMessageId,
+          userMessage,
+          abortController.signal
+        );
+      }
     } catch (error) {
       // Check if this was an intentional abort
       if (abortController.signal.aborted) {
@@ -114,6 +119,147 @@ export default function ChatInput({ conversationId }: ChatInputProps) {
       }
       setIsGenerating(false);
     }
+  };
+
+  /**
+   * Demo mode response - Simulated streaming when no model is loaded
+   * This allows users to try the UI without downloading a model
+   */
+  const generateDemoResponse = async (
+    conversationId: string,
+    messageId: string,
+    prompt: string,
+    signal: AbortSignal
+  ) => {
+    // Generate contextual demo responses
+    const responses = generateDemoResponses(prompt);
+    
+    let currentText = '';
+    const words = responses.split(' ');
+    
+    for (let i = 0; i < words.length; i++) {
+      if (signal.aborted) break;
+      
+      // Simulate typing speed (faster than real LLM for better UX)
+      await new Promise(resolve => setTimeout(resolve, 20 + Math.random() * 25));
+      
+      currentText += (i > 0 ? ' ' : '') + words[i];
+      updateMessage(conversationId, messageId, currentText);
+    }
+    
+    if (!signal.aborted) {
+      // Add demo notice at the end
+      updateMessage(conversationId, messageId, 
+        currentText + '\n\n---\n*💡 **Demo Mode** - Load a local GGUF model for real AI responses!*'
+      );
+    }
+  };
+
+  /**
+   * Generate contextual demo responses based on user input
+   */
+  const generateDemoResponses = (prompt: string): string => {
+    const lowerPrompt = prompt.toLowerCase();
+    
+    // Detect intent and return relevant response
+    if (lowerPrompt.includes('hello') || lowerPrompt.includes('hi') || lowerPrompt.includes('hey')) {
+      return `Hello! 👋 I'm **CodeMate**, your offline AI coding assistant.
+
+I'm currently running in **demo mode** since no AI model has been loaded yet.
+
+### To get started:
+1. 📥 Go to **Model Manager** (Ctrl+M)
+2. 🔽 Download a model or load your own .gguf file
+3. 💬 Start chatting with real AI assistance!
+
+What would you like help with today?`;
+    }
+    
+    if (lowerPrompt.includes('code') || lowerPrompt.includes('function') || lowerPrompt.includes('write')) {
+      return `I'd be happy to help you write some code! Here's an example:
+
+\`\`\`typescript
+// Example function - will generate real code when model is loaded
+function processData<T>(data: T[], processor: (item: T) => T): T[] {
+  return data.map(processor).filter(item => item !== null && item !== undefined);
+}
+
+// Usage example
+const numbers = [1, 2, 3, null, 4, undefined, 5];
+const result = processData(numbers, n => n * 2);
+console.log(result); // [2, 4, 6, 8, 10]
+\`\`\`
+
+> ⚠️ This is a **demo response**. Load an AI model for real, contextual code generation!`;
+    }
+    
+    if (lowerPrompt.includes('debug') || lowerPrompt.includes('error') || lowerPrompt.includes('fix')) {
+      return `I can help debug your code! Here's my approach:
+
+## Debugging Strategy
+
+| Step | Action | Tool |
+|------|--------|------|
+| 1 | Reproduce the issue | Manual testing |
+| 2 | Check error messages | Console/Logs |
+| 3 | Isolate the problem | Binary search |
+| 4 | Find root cause | Code analysis |
+| 5 | Apply fix | Edit |
+| 6 | Verify | Test again |
+
+### Common Issues to Check:
+- ✅ Variable types match expected
+- ✅ Null/undefined checks in place
+- ✅ Async operations properly awaited
+- ✅ API responses handled correctly
+
+> 💡 **Tip**: Share the specific error message and relevant code for targeted help!`;
+    }
+    
+    if (lowerPrompt.includes('help') || lowerPrompt.includes('what can')) {
+      return `# What Can CodeMate Do? 🚀
+
+## Core Features:
+- 💬 **Chat** - Ask questions about any programming topic
+- 📝 **Code Generation** - Write functions, classes, APIs
+- 🐛 **Debugging** - Find and fix bugs in your code
+- 📖 **Explain** - Understand complex codebases
+- 🔧 **Refactor** - Improve existing code
+
+## Advanced Features:
+- 📁 **File Explorer** - Browse and analyze projects
+- 📊 **Stats Dashboard** - Track usage metrics
+- 🎨 **Theme Customizer** - Personalize UI
+- 🌐 **Bilingual** - English + Urdu support
+
+## Getting Started:
+1. Press **Ctrl+M** to open Model Manager
+2. Download or load a GGUF model
+3. Start chatting!
+
+---
+*Load a model to unlock full AI capabilities!*`;
+    }
+
+    // Default intelligent response
+    return `I understand you're asking about: **"${prompt.slice(0, 60)}${prompt.length > 60 ? '...' : ''}"**
+
+This is a **demo response** - I'm simulating what the AI would say.
+
+### When you load a real model, I'll be able to:
+- ✅ Answer questions about any programming topic
+- ✅ Write and explain code in any language
+- ✅ Debug and fix errors in your codebase
+- ✅ Help design architectures and APIs
+- ✅ Explain complex concepts simply
+
+### Quick Start:
+1. Click **📥 Models** in the sidebar
+2. Choose and download a model (recommended: Llama 3 8B Q4)
+3. Come back here and ask me anything!
+
+---
+*Ready when you are! 🦙*`;
   };
 
   /**
@@ -264,9 +410,9 @@ export default function ChatInput({ conversationId }: ChatInputProps) {
               placeholder={
                 modelLoaded 
                   ? "Ask me anything about coding..." 
-                  : "⚠️ Load a model first to start chatting..."
+                  : "💬 Type a message (Demo Mode - no model loaded)..."
               }
-              disabled={isGenerating || !modelLoaded}
+              disabled={isGenerating}
               rows={1}
               className="w-full px-4 py-3 bg-transparent resize-none focus:outline-none text-white placeholder-dark-500 disabled:cursor-not-allowed disabled:opacity-60 pr-16 max-h-[160px] overflow-y-auto custom-scrollbar leading-relaxed"
               style={{ minHeight: '48px' }}
@@ -310,15 +456,17 @@ export default function ChatInput({ conversationId }: ChatInputProps) {
               /* Send button */
               <button
                 onClick={handleSend}
-                disabled={!message.trim() || !modelLoaded || isComposing}
+                disabled={!message.trim() || isComposing}
                 className={`
                   p-2.5 rounded-xl transition-all duration-200 transform active:scale-95
-                  ${message.trim() && modelLoaded
-                    ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-md shadow-primary-600/30 hover:shadow-lg hover:from-primary-500 hover:to-primary-400'
+                  ${message.trim()
+                    ? modelLoaded
+                      ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-md shadow-primary-600/30 hover:shadow-lg hover:from-primary-500 hover:to-primary-400'
+                      : 'bg-gradient-to-r from-amber-600 to-amber-500 text-white shadow-md shadow-amber-600/30 hover:shadow-lg hover:from-amber-500 hover:to-amber-400'
                     : 'bg-dark-700/80 text-dark-500 cursor-not-allowed'
                   }
                 `}
-                title="Send message (Enter)"
+                title={modelLoaded ? "Send message (Enter)" : "Send (Demo Mode)"}
               >
                 <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -339,8 +487,8 @@ export default function ChatInput({ conversationId }: ChatInputProps) {
               </span>
             ) : (
               <span className="flex items-center gap-1.5 text-amber-500/70">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                No model loaded
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                Demo Mode
               </span>
             )}
             
