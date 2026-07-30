@@ -3,9 +3,13 @@
  * 
  * This module provides the complete system prompt structure that defines
  * how the AI assistant behaves, responds, and uses tools.
+ * 
+ * Now includes integration with Project Memory System (CODEMATE.md,
+ * .codemate/ folder, skills, and auto-learned memories).
  */
 
 import type { SystemPromptConfig } from '../types';
+import { MemorySystem } from './memorySystem';
 
 // ============================================================
 // IDENTITY LAYER - Who is the AI?
@@ -407,3 +411,134 @@ export default {
   generateSystemPrompt,
   PROMPT_VARIANTS,
 };
+
+// ============================================================
+// MEMORY-INTEGRATED PROMPT GENERATION
+// ============================================================
+
+/**
+ * Generate a system prompt with project-specific context from memory system.
+ * This is the recommended way to generate prompts for actual inference.
+ * 
+ * @param memorySystem - Initialized MemorySystem instance for the current project
+ * @param userMessage - Current user message (for relevance scoring of memories)
+ * @param baseVariant - Base prompt variant to use ('coding', 'debugging', etc.)
+ * @param options - Additional context options
+ */
+export async function generateContextAwarePrompt(
+  memorySystem: MemorySystem | null,
+  userMessage: string = '',
+  baseVariant: keyof typeof PROMPT_VARIANTS = 'coding',
+  options?: {
+    maxContextTokens?: number;
+    includeSkills?: boolean;
+    includeMemories?: boolean;
+    activeSkillId?: string;
+  }
+): Promise<string> {
+  // Start with base system prompt
+  let prompt = PROMPT_VARIANTS[baseVariant] || generateSystemPrompt();
+  
+  // If no memory system available, return base prompt
+  if (!memorySystem) {
+    return prompt;
+  }
+  
+  try {
+    // Build context from memory system
+    const contextString = memorySystem.buildPromptContext({
+      maxTokens: options?.maxContextTokens || 2000,
+      relevantTo: userMessage,
+      includeInstructions: true,
+      includeSkills: options?.includeSkills !== false,
+      includeMemories: options?.includeMemories !== false,
+      includePreferences: true,
+    });
+    
+    // If we have context, append it to the prompt
+    if (contextString.trim()) {
+      prompt += '\n\n' + contextString;
+      
+      // Add instruction about using this context
+      prompt += `\n\n## Context Usage Instructions
+- The "Project Instructions" above contain project-specific rules you MUST follow
+- Use "Available Skills" to determine which tools and output formats are appropriate
+- Reference "Project Memory" for learned patterns and decisions from previous interactions
+- Adapt your response style based on "User Preferences"
+- When in conflict between general rules and Project Instructions, PROJECT INSTRUCTIONS TAKE PRECEDENCE`;
+    }
+    
+    // If there's an active skill, add its specific instructions
+    if (options?.activeSkillId) {
+      const matchingSkill = memorySystem.getMatchingSkill(userMessage);
+      if (matchingSkill && matchingSkill.skill.promptAddition) {
+        prompt += `\n\n## Active Skill: ${matchingSkill.skill.name}
+${matchingSkill.skill.promptAddition}`;
+        
+        if (matchingSkill.skill.outputFormat) {
+          prompt += `\n\n### Expected Output Format for This Skill:\n${matchingSkill.skill.outputFormat}`;
+        }
+      }
+    }
+    
+  } catch (error) {
+    console.error('Failed to build context-aware prompt:', error);
+    // Return base prompt if context building fails
+  }
+  
+  return prompt;
+}
+
+/**
+ * Generate a system prompt with inline context (synchronous version).
+ * Use this when you already have the context string pre-built.
+ */
+export function generatePromptWithContext(
+  baseVariant: keyof typeof PROMPT_VARIANTS = 'coding',
+  contextString?: string
+): string {
+  let prompt = PROMPT_VARIANTS[baseVariant] || generateSystemPrompt();
+  
+  if (contextString && contextString.trim()) {
+    prompt += '\n\n' + contextString;
+    
+    prompt += `\n\n## Context Usage Instructions
+- Follow any project-specific instructions provided above
+- Use available skills information to guide your response
+- Reference project memory for relevant context`;
+  }
+  
+  return prompt;
+}
+
+/**
+ * Get a summary of what context would be included (for UI display)
+ */
+export function getContextPreview(memorySystem: MemorySystem | null): {
+  hasInstructions: boolean;
+  instructionSections: number;
+  skillsCount: number;
+  memoriesCount: number;
+  hasPreferences: boolean;
+} {
+  if (!memorySystem) {
+    return {
+      hasInstructions: false,
+      instructionSections: 0,
+      skillsCount: 0,
+      memoriesCount: 0,
+      hasPreferences: false,
+    };
+  }
+  
+  const status = memorySystem.getStatus();
+  const context = memorySystem.getProjectContext();
+  
+  return {
+    hasInstructions: status.hasCodeMate,
+    instructionSections: context.instructions?.sections.length || 0,
+    skillsCount: context.activeSkills.length,
+    memoriesCount: context.memories.length,
+    hasPreferences: true, // Always have preferences (even if defaults)
+  };
+}

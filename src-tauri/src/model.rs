@@ -486,6 +486,9 @@ pub fn generate_text(
     // Sampling config
     let temp = settings.temperature.max(0.0); // Clamp to non-negative
     
+    // Track previously generated tokens for repeat penalty
+    let mut prev_tokens: Vec<llama_cpp_rs::Token> = Vec::new();
+    
     while generated_count < max_tokens {
         // Get logits for next token
         let logits = context.get_logits().ok_or("Failed to get logits")?;
@@ -495,7 +498,7 @@ pub fn generate_text(
             // Greedy decoding when temperature is 0
             sample_greedy(logits)
         } else {
-            // Sample with temperature, top_k, top_p
+            // Sample with temperature, top_k, top_p, repeat_penalty
             sample_token(
                 logits,
                 temp,
@@ -503,6 +506,7 @@ pub fn generate_text(
                 settings.top_p,
                 settings.repeat_penalty,
                 eos_token_id,
+                &prev_tokens,
             )
         };
         
@@ -517,6 +521,9 @@ pub fn generate_text(
             Ok(s) => s,
             Err(_) => continue, // Skip invalid tokens
         };
+        
+        // Track this token for repeat penalty
+        prev_tokens.push(next_token);
         
         generated_text.push_str(&token_str);
         generated_count += 1;
@@ -585,7 +592,7 @@ fn sample_greedy(logits: &[f32]) -> llama_cpp_rs::Token {
     llama_cpp_rs::Token::new(best_idx as i32)
 }
 
-/// Sample a token with temperature, top-k, and top-p filtering
+/// Sample a token with temperature, top-k, top-p filtering, and repeat penalty
 fn sample_token(
     logits: &[f32],
     temperature: f64,
@@ -593,66 +600,116 @@ fn sample_token(
     top_p: f64,
     repeat_penalty: f64,
     _eos_token: llama_cpp_rs::Token,
+    prev_tokens: &[llama_cpp_rs::Token],
 ) -> llama_cpp_rs::Token {
-    // Apply temperature scaling
-    let scaled_logits: Vec<f32> = logits.iter()
-        .map(|&x| (x as f64 / temperature) as f32)
-        .collect();
+    let vocab_size = logits.len();
     
-    // Sort indices by logit value (descending)
-    let mut indices: Vec<usize> = (0..scaled_logits.len()).collect();
-    indices.sort_by(|&a, &b| scaled_logits[b].partial_cmp(&scaled_logs[a]).unwrap_or(std::cmp::Ordering::Equal));
-    
-    // Apply top-k filter: keep only top k tokens
-    let k = top_k as usize;
-    if k < indices.len() {
-        // Set logits below top-k to -inf
-        for &idx in indices.iter().skip(k) {
-            // Would set to -inf here, but we'll just skip them
+    // Step 1: Apply repeat penalty to tokens that exist in previous context
+    let mut penalized_logits: Vec<f32> = logits.to_vec();
+    if repeat_penalty > 1.0 && !prev_tokens.is_empty() {
+        let token_set: std::collections::HashSet<i32> = prev_tokens.iter()
+            .map(|t| t.id())
+            .collect();
+        
+        for (i, logit) in penalized_logits.iter_mut().enumerate() {
+            if token_set.contains(&(i as i32)) {
+                if *logit > 0.0 {
+                    *logit /= repeat_penalty as f32;
+                } else {
+                    *logit *= repeat_penalty as f32;
+                }
+            }
         }
     }
     
-    // Apply top-p (nucleus) filtering
-    // Convert to probabilities via softmax
-    let mut probs: Vec<f32> = scaled_logits.iter()
-        .map(|&x| softmax_single(x, &scaled_logits))
+    // Step 2: Apply temperature scaling
+    let scaled_logits: Vec<f32> = penalized_logits.iter()
+        .map(|&x| if temperature > 0.0 { (x as f64 / temperature) as f32 } else { x })
         .collect();
     
-    // Normalize and apply top-p
-    let sorted_probs = sort_with_indices(&probs, true);
-    let mut cumsum = 0.0f32;
-    let mut cutoff_idx = probs.len();
+    // Step 3: Sort indices by logit value (descending) for top-k
+    let mut indices: Vec<usize> = (0..vocab_size).collect();
+    indices.sort_by(|&a, &b| scaled_logits[b].partial_cmp(&scaled_logits[a]).unwrap_or(std::cmp::Ordering::Equal));
     
-    for (i, &(prob, _idx)) in sorted_probs.iter().enumerate() {
+    // Step 4: Apply top-k filter - set non-top-k logits to -infinity
+    let k = top_k as usize.min(vocab_size);
+    let mut filtered_logits = vec![f32::NEG_INFINITY; vocab_size];
+    for (rank, &idx) in indices.iter().enumerate() {
+        if rank < k {
+            filtered_logits[idx] = scaled_logits[idx];
+        } else {
+            filtered_logits[idx] = f32::NEG_INFINITY;
+        }
+    }
+    
+    // Step 5: Convert to probabilities via softmax (with -inf handling)
+    let mut probs: Vec<f32> = (0..vocab_size)
+        .map(|i| {
+            if filtered_logits[i] == f32::NEG_INFINITY {
+                0.0f32
+            } else {
+                softmax_single(filtered_logits[i], &filtered_logits)
+            }
+        })
+        .collect();
+    
+    // Step 6: Apply top-p (nucleus) filtering - sort by probability descending
+    let mut prob_indices: Vec<(f32, usize)> = probs.iter().cloned().zip(0..vocab_size).collect();
+    prob_indices.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    
+    let mut cumsum = 0.0f32;
+    let mut cutoff_prob = top_p as f32;
+    
+    for &(prob, _) in &prob_indices {
         cumsum += prob;
-        if cumsum > top_p as f32 {
-            cutoff_idx = i + 1;
+        if cumsum > cutoff_prob {
             break;
         }
     }
     
-    // Zero out probabilities beyond cutoff
-    for (i, prob) in probs.iter_mut().enumerate() {
-        // Simplified: just use softmax output directly
-        *prob = softmax_single(scaled_logits[i], &scaled_logits);
+    // Renormalize after top-p cutoff
+    let total_prob: f32 = prob_indices.iter()
+        .take_while(|&&(p, _)| { cumsum -= p; cumsum >= 0.0 })
+        .map(|&(p, _)| p)
+        .sum();
+    
+    // Simpler approach: just zero out beyond cumulative > top_p
+    let mut final_probs = vec![0.0f32; vocab_size];
+    let mut running_sum = 0.0f32;
+    let mut tokens_included = 0usize;
+    
+    for &(prob, idx) in &prob_indices {
+        if running_sum <= top_p as f32 || tokens_included < 2 {
+            final_probs[idx] = prob;
+            running_sum += prob;
+            tokens_included += 1;
+        }
     }
     
-    // Sample from distribution
+    // Normalize to sum to 1.0
+    let sum: f32 = final_probs.iter().sum();
+    if sum > 0.0 {
+        for p in final_probs.iter_mut() {
+            *p /= sum;
+        }
+    }
+    
+    // Step 7: Sample from final distribution
     let dist = rand_distr::Uniform::new(0.0f32, 1.0);
     let mut rng = rand::thread_rng();
     let rand_val: f32 = dist.sample(&mut rng);
     
     // Find token by cumulative probability
     let mut cumulative = 0.0f32;
-    for (i, prob) in probs.iter().enumerate() {
+    for (i, prob) in final_probs.iter().enumerate() {
         cumulative += prob;
-        if cumulative >= rand_val || i == probs.len() - 1 {
+        if cumulative >= rand_val || i == vocab_size - 1 {
             return llama_cpp_rs::Token::new(i as i32);
         }
     }
     
     // Fallback: return highest probability token
-    llama_cpp_rs::Token::new(0)
+    llama_cpp_rs::Token::new(indices[0] as i32)
 }
 
 /// Softmax for a single element given all values

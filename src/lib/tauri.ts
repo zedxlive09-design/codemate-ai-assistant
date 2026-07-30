@@ -56,6 +56,28 @@ export interface InferenceSystemInfo {
   canRun13b: boolean;
   canRun34b: boolean;
   canRun70b: boolean;
+  /** GPU information (if available) */
+  gpu?: GpuInfo;
+}
+
+/** GPU Information structure */
+export interface GpuInfo {
+  /** Whether a compatible GPU was detected */
+  available: boolean;
+  /** GPU name/model */
+  name: string;
+  /** GPU vendor (NVIDIA, AMD, Intel, Apple) */
+  vendor: string;
+  /** Available VRAM in GB */
+  vramGb: number;
+  /** Driver version (if detectable) */
+  driverVersion?: string;
+  /** Compute capability (for NVIDIA) */
+  computeCapability?: string;
+  /** Supported backends (CUDA, Metal, Vulkan) */
+  supportedBackends: string[];
+  /** Recommended number of layers to offload (if known) */
+  recommendedLayers?: number;
 }
 
 export interface LoadModelResult {
@@ -168,6 +190,13 @@ export const modelCommands = {
    */
   getInferenceSystemInfo: async (): Promise<InferenceSystemInfo> => {
     return invoke('get_inference_system_info');
+  },
+
+  /**
+   * Get detailed GPU information
+   */
+  getGpuInfo: async (): Promise<GpuInfo> => {
+    return invoke('get_gpu_info');
   },
 };
 

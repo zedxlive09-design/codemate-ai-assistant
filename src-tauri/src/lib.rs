@@ -32,6 +32,7 @@ pub fn run() {
             commands::model::ensure_model_directory,
             commands::model::validate_model_file,
             commands::model::get_inference_system_info,
+            commands::model::get_gpu_info,
             // === PROJECT COMMANDS ===
             commands::project::list_directory,
             commands::project::analyze_project,

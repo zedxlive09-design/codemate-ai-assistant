@@ -470,6 +470,9 @@ pub async fn get_inference_system_info() -> Result<InferenceSystemInfo, String> 
     let available_memory_gb = sys.available_memory() as f64 / (1024.0 * 1024.0 * 1024.0);
     let cpu_cores = num_cpus::get();
     
+    // Detect GPU information
+    let gpu_info = detect_gpu_info();
+    
     Ok(InferenceSystemInfo {
         totalMemoryGb: total_memory_gb,
         availableMemoryGb: available_memory_gb,
@@ -479,15 +482,136 @@ pub async fn get_inference_system_info() -> Result<InferenceSystemInfo, String> 
             .map(|c| c.brand().to_string())
             .unwrap_or_else(|| "Unknown".to_string()),
         recommendedMaxParameters: calculate_recommended_max_params(available_memory_gb),
-        canRun7b: available_memory_gb > 6.0,
-        canRun13b: available_memory_gb > 12.0,
-        canRun34b: available_memory_gb > 24.0,
-        canRun70b: available_memory_gb > 48.0,
+        canRun7b: available_memory_gb > 6.0 || (gpu_info.available && gpu_info.vramGb > 6.0),
+        canRun13b: available_memory_gb > 12.0 || (gpu_info.available && gpu_info.vramGb > 12.0),
+        canRun34b: available_memory_gb > 24.0 || (gpu_info.available && gpu_info.vramGb > 24.0),
+        canRun70b: available_memory_gb > 48.0 || (gpu_info.available && gpu_info.vramGb > 48.0),
+        // New GPU fields
+        gpu: Some(gpu_info),
     })
 }
 
+/// Get detailed GPU information
+#[tauri::command]
+pub async fn get_gpu_info() -> Result<GpuInfo, String> {
+    Ok(detect_gpu_info())
+}
+
+/// Detect GPU information from the system
+fn detect_gpu_info() -> GpuInfo {
+    // Try multiple methods to detect GPU
+    
+    // Method 1: Check for CUDA (NVIDIA)
+    #[cfg(feature = "cuda")]
+    {
+        // If CUDA feature is enabled, we have GPU support
+        return GpuInfo {
+            available: true,
+            name: "CUDA GPU".to_string(),
+            vendor: "NVIDIA".to_string(),
+            vramGb: estimate_cuda_vram(),
+            driverVersion: get_cuda_version(),
+            computeCapability: None,
+            supportedBackends: vec!["CUDA".to_string()],
+            recommendedLayers: Some(35), // Default recommendation for 7B models
+        };
+    }
+    
+    // Method 2: Check environment variables and common paths
+    if std::env::var("CUDA_PATH").is_ok() || std::env::var("CUDA_HOME").is_ok() {
+        return GpuInfo {
+            available: true,
+            name: "NVIDIA GPU (detected via CUDA)".to_string(),
+            vendor: "NVIDIA".to_string(),
+            vramGb: estimate_nvidia_vram_from_env(),
+            driverVersion: std::env::var("CUDA_VERSION").ok(),
+            computeCapability: None,
+            supportedBackends: vec!["CUDA".to_string()],
+            recommendedLayers: Some(30),
+        };
+    }
+    
+    // Method 3: Check for Metal (macOS)
+    #[cfg(target_os = "macos")]
+    {
+        if std::path::Path::new("/System/Library/Frameworks/Metal.framework").exists() {
+            return GpuInfo {
+                available: true,
+                name: "Apple GPU (Metal)".to_string(),
+                vendor: "Apple".to_string(),
+                vramGb: get_metal_shared_memory(), // Unified memory on Apple Silicon
+                driverVersion: Some("Metal".to_string()),
+                computeCapability: None,
+                supportedBackends: vec!["Metal".to_string()],
+                recommendedLayers:: Some(25), // Conservative for unified memory
+            };
+        }
+    }
+    
+    // Method 4: Check for Vulkan / other GPUs
+    if is_vulkan_available() {
+        return GpuInfo {
+            available: true,
+            name: "Vulkan-compatible GPU".to_string(),
+            vendor: "Unknown".to_string(),
+            vramGb: 0.0, // Unknown without Vulkan API call
+            driverVersion: None,
+            computeCapability: None,
+            supportedBackends: vec!["Vulkan".to_string()],
+            recommendedLayers: None, // Don't recommend without knowing VRAM
+        };
+    }
+    
+    // Default: No GPU detected
+    GpuInfo {
+        available: false,
+        name: String::new(),
+        vendor: String::new(),
+        vramGb: 0.0,
+        driverVersion: None,
+        computeCapability: None,
+        supportedBackends: vec![],
+        recommendedLayers: None,
+    }
+}
+
+/// Estimate NVIDIA VRAM from environment or common values
+fn estimate_nvidia_vram_from_env() -> f64 {
+    // Try reading from nvidia-smi if available
+    if let Ok(output) = std::process::Command::new("nvidia-smi")
+        .args(["--query-gpu=memory.total", "--format=csv,noheader,nounits"])
+        .output() 
+    {
+        if let Ok(vram_str) = String::from_utf8(output.stdout) {
+            if let Ok(vram_mb) = vram_str.trim().parse::<f64>() {
+                return vram_mb / 1024.0; // Convert MB to GB
+            }
+        }
+    }
+    
+    // Return a conservative default
+    8.0 // Assume 8GB if NVIDIA detected but can't read exact value
+}
+
+#[cfg(target_os = "macos")]
+fn get_metal_shared_memory() -> f64 {
+    // On macOS with Apple Silicon, use system memory as approximation
+    let sys = sysinfo::System::new_with_specifics(
+        sysinfo::RefreshKind::new().with_memory(sysinfo::MemoryRefreshKind::new())
+    );
+    sys.refresh_memory();
+    // Use 75% of RAM as safe estimate for GPU memory (unified memory)
+    sys.total_memory() as f64 * 0.75 / (1024.0 * 1024.0 * 1024.0)
+}
+
+fn is_vulkan_available() -> bool {
+    // Simple check - look for Vulkan loader
+    cfg!(target_os = "linux") && std::path::Path::new("/usr/lib/libvulkan.so.1").exists()
+        || std::path::Path::new("/usr/local/lib/libvulkan.so.1").exists()
+}
+
 /// System info for inference capabilities
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct InferenceSystemInfo {
     pub totalMemoryGb: f64,
     pub availableMemoryGb: f64,
@@ -498,6 +622,33 @@ pub struct InferenceSystemInfo {
     pub canRun13b: bool,
     pub canRun34b: bool,
     pub canRun70b: bool,
+    /// GPU information (if available)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gpu: Option<GpuInfo>,
+}
+
+/// GPU Information structure
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GpuInfo {
+    /// Whether a compatible GPU was detected
+    pub available: bool,
+    /// GPU name/model
+    pub name: String,
+    /// GPU vendor (NVIDIA, AMD, Intel, Apple)
+    pub vendor: String,
+    /// Available VRAM in GB
+    pub vramGb: f64,
+    /// Driver version (if detectable)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub driverVersion: Option<String>,
+    /// Compute capability (for NVIDIA)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub computeCapability: Option<String>,
+    /// Supported backends (CUDA, Metal, Vulkan)
+    pub supportedBackends: Vec<String>,
+    /// Recommended number of layers to offload (if known)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recommendedLayers: Option<u32>,
 }
 
 /// Calculate recommended max model parameters based on available RAM
