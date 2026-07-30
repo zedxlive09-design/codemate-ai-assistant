@@ -47,9 +47,18 @@ export default function Sidebar() {
   };
 
   const handleOpenProject = async () => {
-    const path = await fileCommands.selectFolder();
-    if (path) {
-      setProjectPath(path);
+    try {
+      const path = await fileCommands.selectFolder();
+      if (path) {
+        setProjectPath(path);
+      }
+    } catch (e) {
+      console.warn('Dialog failed (this is OK in some environments):', e);
+      // Fallback: prompt user for path manually
+      const path = prompt('Enter project path:');
+      if (path) {
+        setProjectPath(path);
+      }
     }
   };
 
@@ -452,8 +461,16 @@ function ConversationItem({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              if (confirm('Delete this conversation?')) {
-                onDelete();
+              // Use window.confirm with fallback
+              try {
+                if (window.confirm('Delete this conversation?')) {
+                  onDelete();
+                }
+              } catch {
+                // If confirm fails, just delete (or use a custom prompt)
+                if (window.prompt('Type DELETE to confirm:') === 'DELETE') {
+                  onDelete();
+                }
               }
             }}
             className={`shrink-0 p-1.5 rounded-lg transition-all duration-150 ${

@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App.debug'  // Debug version with error boundaries
+import App from './App'  // Real App with fixes
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
