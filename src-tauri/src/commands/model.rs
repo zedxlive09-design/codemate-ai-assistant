@@ -146,11 +146,17 @@ pub async fn generate(
     log::info!(target: "command", "generate called (non-streaming), prompt length: {}", prompt.len());
     
     let model = {
-        let state = state.lock().map_err(|e| e.to_string())?;
+        let mut state = state.lock().map_err(|e| e.to_string())?;
         
-        match state.loaded_model {
-            Some(ref m) if m.is_real() => m.clone(),
-            Some(_) => return Err("Model is not properly initialized. Try reloading.".to_string()),
+        match state.loaded_model.take() {
+            Some(m) if m.is_real() => {
+                state.loaded_model = Some(m.clone());
+                m
+            },
+            Some(m) => {
+                state.loaded_model = Some(m);
+                return Err("Model is not properly initialized. Try reloading.".to_string());
+            },
             None => return Err("No model loaded. Please load a model first.".to_string()),
         }
     };
@@ -171,11 +177,17 @@ pub async fn generate_streaming(
     log::info!(target: "command", "generate_streaming called, prompt length: {}", prompt.len());
     
     let model = {
-        let state = state.lock().map_err(|e| e.to_string())?;
+        let mut state = state.lock().map_err(|e| e.to_string())?;
         
-        match state.loaded_model {
-            Some(ref m) if m.is_real() => m.clone(),
-            Some(_) => return Err("Model is not properly initialized. Try reloading.".to_string()),
+        match state.loaded_model.take() {
+            Some(m) if m.is_real() => {
+                state.loaded_model = Some(m.clone());
+                m
+            },
+            Some(m) => {
+                state.loaded_model = Some(m);
+                return Err("Model is not properly initialized. Try reloading.".to_string());
+            },
             None => return Err("No model loaded. Please load a model first.".to_string()),
         }
     };
