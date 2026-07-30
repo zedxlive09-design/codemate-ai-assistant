@@ -11,7 +11,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { readTextFile, exists, mkdir, readDir } from '@tauri-apps/plugin-fs';
+import { readTextFile, exists, mkdir } from '@tauri-apps/plugin-fs';
 
 // ============================================================
 // TYPES
@@ -401,9 +401,4 @@ export default {
   buildPromptContext,
   DEFAULT_PREFERENCES,
   DEFAULT_CODEMATE_CONTENT,
-};
-
-// Re-export types for use in other modules
-export type {
-  SkillDefinition,
 };

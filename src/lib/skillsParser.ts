@@ -11,7 +11,8 @@
  * - Custom prompt additions
  */
 
-import { readTextFile, exists, readDir } from '@tauri-apps/plugin-fs';
+import { readTextFile, exists } from '@tauri-apps/plugin-fs';
+import { invoke } from '@tauri-apps/api/core';
 import type { SkillDefinition } from './projectMemory';
 
 // ============================================================
@@ -561,7 +562,10 @@ export async function loadCustomSkills(projectPath: string): Promise<SkillDefini
       return skills;
     }
     
-    const entries = await readDir(skillsDir);
+    const entries = await invoke<Array<{ name: string; isFile: boolean; isDirectory: boolean }>>('list_directory', { 
+      path: skillsDir, 
+      recursive: false 
+    });
     
     for (const entry of entries) {
       if (entry.name.endsWith('.md') && !entry.name.startsWith('.')) {

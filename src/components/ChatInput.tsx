@@ -2,6 +2,17 @@ import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { useStore } from '../store/useStore';
 import { fileCommands, modelCommands } from '../lib/tauri';
 import type { InferenceSettings } from '../types';
+import { Sparkles, Code, Bug, Zap, BookOpen, Lightbulb, ChevronRight } from 'lucide-react';
+
+// Smart suggestions based on context
+const SMART_SUGGESTIONS = [
+  { icon: <Code size={14} />, label: 'Write a function', prompt: 'Write a function that ' },
+  { icon: <Bug size={14} />, label: 'Debug this error', prompt: 'Help me debug this error: ' },
+  { icon: <Zap size={14} />, label: 'Optimize code', prompt: 'Optimize this code for performance: ' },
+  { icon: <BookOpen size={14} />, label: 'Explain code', prompt: 'Explain what this code does: ' },
+  { icon: <Lightbulb size={14} />, label: 'Add comments', prompt: 'Add detailed comments to the code: ' },
+  { icon: <Sparkles size={14} />, label: 'Refactor', prompt: 'Refactor this code to be more readable: ' },
+];
 
 interface ChatInputProps {
   conversationId: string;
@@ -368,8 +379,37 @@ This is a **demo response** - I'm simulating what the AI would say.
     setAttachedFiles(attachedFiles.filter(f => f !== path));
   };
 
+  // Handle suggestion click
+  const handleSuggestionClick = (prompt: string) => {
+    setMessage(prompt);
+    textareaRef.current?.focus();
+  };
+
   return (
     <div className="border-t border-dark-800/80 bg-dark-900/50 backdrop-blur-sm">
+      {/* Smart Suggestions - Show when input is empty and not generating */}
+      {!message && !isGenerating && (
+        <div className="px-4 pt-3 animate-fadeIn">
+          <div className="flex items-center gap-2 mb-2 text-[10px] font-medium text-dark-500 uppercase tracking-wider">
+            <Sparkles size={10} />
+            Quick Actions
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {SMART_SUGGESTIONS.map((suggestion, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleSuggestionClick(suggestion.prompt)}
+                className="group inline-flex items-center gap-1.5 px-3 py-1.5 bg-dark-800/60 hover:bg-gradient-to-r hover:from-primary-600/20 hover:to-purple-600/20 border border-dark-700/50 hover:border-primary-500/30 rounded-lg text-xs text-dark-400 hover:text-white transition-all duration-200"
+              >
+                <span className="text-dark-500 group-hover:text-primary-400 transition-colors">{suggestion.icon}</span>
+                <span>{suggestion.label}</span>
+                <ChevronRight size={10} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Attached files */}
       {attachedFiles.length > 0 && (
         <div className="px-4 pt-3 flex flex-wrap gap-2">

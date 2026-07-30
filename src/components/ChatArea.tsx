@@ -3,12 +3,15 @@ import { useStore } from '../store/useStore';
 import MessageBubble from './MessageBubble';
 import ChatInput from './ChatInput';
 import WelcomeScreen from './WelcomeScreen';
+import { Brain, Clock, MessageSquare, Sparkles } from 'lucide-react';
 
 export default function ChatArea() {
   const {
     conversations,
     activeConversationId,
     createConversation,
+    projectPath,
+    showMemoryPanel,
   } = useStore();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -32,67 +35,108 @@ export default function ChatArea() {
 
   return (
     <div className="flex-1 flex flex-col">
-      {/* Chat Header */}
-      <div className="px-4 py-3 border-b border-dark-800/70 bg-dark-900/40 backdrop-blur-sm flex items-center justify-between shrink-0">
-        <div>
-          <h2 className="font-medium text-white truncate flex items-center gap-2">
-            <svg className="w-4 h-4 text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            {activeConversation.title}
-          </h2>
-          {activeConversation.projectPath && (
-            <p className="text-xs text-dark-500 mt-0.5 flex items-center gap-1">
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-              </svg>
-              {activeConversation.projectPath.split('/').pop()}
-            </p>
-          )}
+      {/* Chat Header - Enhanced with Glassmorphism */}
+      <div className="px-4 py-3 border-b border-dark-800/70 bg-dark-900/60 backdrop-blur-xl flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3">
+          {/* Animated gradient icon background */}
+          <div className="relative">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary-500/30 to-purple-500/30 rounded-xl blur-lg opacity-60"></div>
+            <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-primary-600 to-purple-600 flex items-center justify-center shadow-lg shadow-primary-600/25">
+              <MessageSquare className="w-5 h-5 text-white" />
+            </div>
+          </div>
+          
+          <div>
+            <h2 className="font-semibold text-white truncate flex items-center gap-2">
+              {activeConversation.title}
+              {projectPath && (
+                <span className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-400 rounded-full border border-emerald-500/20">
+                  <Sparkles size={10} />
+                  Project Context
+                </span>
+              )}
+            </h2>
+            {activeConversation.projectPath && (
+              <p className="text-xs text-dark-500 mt-0.5 flex items-center gap-1">
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+                {activeConversation.projectPath.split('/').pop()}
+              </p>
+            )}
+          </div>
         </div>
 
-        {/* Chat stats */}
-        <div className="flex items-center gap-3 text-xs text-dark-500">
-          <span>{activeConversation.messages.length} messages</span>
-          <span>•</span>
-          <time dateTime={activeConversation.updatedAt instanceof Date ? activeConversation.updatedAt.toISOString() : String(activeConversation.updatedAt)}>
-            {formatRelativeTime(activeConversation.updatedAt instanceof Date ? activeConversation.updatedAt : new Date(activeConversation.updatedAt))}
-          </time>
+        {/* Chat stats - Enhanced */}
+        <div className="flex items-center gap-4">
+          {/* Memory Active Indicator */}
+          {showMemoryPanel && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-purple-500/15 border border-purple-500/25 rounded-lg">
+              <Brain size={12} className="text-purple-400 animate-pulse" />
+              <span className="text-[11px] font-medium text-purple-300">Memory Active</span>
+            </div>
+          )}
+          
+          <div className="flex items-center gap-3 text-xs text-dark-500">
+            <span className="flex items-center gap-1">
+              <MessageSquare size={12} />
+              {activeConversation.messages.length} messages
+            </span>
+            <span className="text-dark-700">•</span>
+            <span className="flex items-center gap-1">
+              <Clock size={12} />
+              <time dateTime={activeConversation.updatedAt instanceof Date ? activeConversation.updatedAt.toISOString() : String(activeConversation.updatedAt)}>
+                {formatRelativeTime(activeConversation.updatedAt instanceof Date ? activeConversation.updatedAt : new Date(activeConversation.updatedAt))}
+              </time>
+            </span>
+          </div>
         </div>
       </div>
 
       {/* Messages Container */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 scroll-smooth">
         {activeConversation.messages.length === 0 ? (
-          /* Empty chat state */
+          /* Empty chat state - Enhanced */
           <div className="flex items-center justify-center h-full text-dark-500 slide-up">
             <div className="text-center max-w-md">
-              {/* Empty state illustration */}
-              <div className="w-20 h-20 mx-auto mb-5 relative">
-                <div className="absolute inset-0 bg-gradient-to-br from-primary-500/20 to-purple-500/20 rounded-full blur-xl"></div>
-                <svg className="relative w-full h-full text-dark-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
+              {/* Empty state illustration - Animated */}
+              <div className="w-24 h-24 mx-auto mb-6 relative">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary-500/30 via-purple-500/20 to-pink-500/30 rounded-full blur-2xl animate-pulse"></div>
+                <div className="absolute inset-4 bg-gradient-to-br from-primary-500/20 to-purple-500/20 rounded-full blur-xl animate-bounce" style={{ animationDuration: '3s' }}></div>
+                <div className="relative w-full h-full rounded-full bg-dark-800/90 border border-dark-700 flex items-center justify-center shadow-2xl">
+                  <MessageSquare className="w-10 h-10 text-dark-600" />
+                </div>
               </div>
-              <p className="text-lg font-medium text-dark-400">No messages yet</p>
-              <p className="text-sm mt-1 text-dark-600">Start a conversation by typing below</p>
+              <p className="text-xl font-semibold text-dark-300 mb-2">No messages yet</p>
+              <p className="text-sm text-dark-600 mb-6">Start a conversation by typing below or try a suggestion</p>
               
-              {/* Suggestion chips */}
+              {/* Suggestion chips - Enhanced */}
               <div className="mt-6 flex flex-wrap justify-center gap-2">
                 {[
-                  'Explain this code',
-                  'Help me debug',
-                  'Write a function',
-                  'Optimize performance'
+                  { icon: '💡', label: 'Explain this code' },
+                  { icon: '🐛', label: 'Help me debug' },
+                  { icon: '✨', label: 'Write a function' },
+                  { icon: '⚡', label: 'Optimize performance' },
+                  { icon: '🔄', label: 'Refactor code' },
+                  { icon: '📝', label: 'Add comments' },
                 ].map((suggestion) => (
                   <button
-                    key={suggestion}
+                    key={suggestion.label}
                     onClick={() => handleStartChat()}
-                    className="px-3 py-1.5 text-xs bg-dark-800 hover:bg-dark-700 border border-dark-700 hover:border-dark-600 rounded-lg transition-all text-dark-400 hover:text-white"
+                    className="group px-4 py-2.5 text-xs bg-dark-800/80 hover:bg-gradient-to-r hover:from-primary-600/30 hover:to-purple-600/30 border border-dark-700 hover:border-primary-500/40 rounded-xl transition-all duration-300 text-dark-400 hover:text-white hover:shadow-lg hover:shadow-primary-500/10 hover:-translate-y-0.5"
                   >
-                    {suggestion}
+                    <span className="mr-1.5">{suggestion.icon}</span>
+                    {suggestion.label}
                   </button>
                 ))}
+              </div>
+
+              {/* Pro tip */}
+              <div className="mt-8 p-3 bg-dark-800/50 rounded-lg border border-dark-700/50">
+                <p className="text-[11px] text-dark-500 flex items-center justify-center gap-1.5">
+                  <Sparkles size={12} className="text-primary-400" />
+                  <span>Pro tip: Open a project folder to enable context-aware responses</span>
+                </p>
               </div>
             </div>
           </div>

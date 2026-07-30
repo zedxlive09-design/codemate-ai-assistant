@@ -1,5 +1,6 @@
 import React from 'react';
 import { useStore } from '../store/useStore';
+import { Brain, Sparkles, Shield, Zap, GlobeLock } from 'lucide-react';
 
 interface WelcomeScreenProps {
   onStartChat: () => void;
@@ -87,46 +88,64 @@ const quickActions = [
 ];
 
 export default function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
-  const { projectPath } = useStore();
+  const { projectPath, toggleMemoryPanel } = useStore();
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-y-auto">
+      {/* Background decorative elements */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary-500/5 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl"></div>
+      </div>
+
       {/* Hero Section */}
-      <div className="max-w-lg w-full text-center mb-10 float-animation">
-        {/* Logo */}
+      <div className="max-w-lg w-full text-center mb-10 float-animation relative z-10">
+        {/* Logo - Enhanced with glassmorphism */}
         <div className="relative inline-block mb-6">
-          {/* Glow effect behind logo */}
-          <div className="absolute inset-0 bg-gradient-to-br from-primary-500 to-purple-600 rounded-3xl blur-2xl opacity-40 animate-pulse" />
+          {/* Multi-layer glow effect */}
+          <div className="absolute inset-0 bg-gradient-to-br from-primary-500 to-purple-600 rounded-3xl blur-3xl opacity-30 animate-pulse" />
+          <div className="absolute inset-2 bg-gradient-to-br from-primary-400/50 to-purple-500/50 rounded-3xl blur-xl opacity-40"></div>
           
-          <div className="relative w-24 h-24 rounded-3xl bg-gradient-to-br from-primary-500 via-primary-400 to-purple-600 flex items-center justify-center shadow-xl shadow-primary-500/30 border border-white/10">
-            <span className="text-white font-bold text-3xl tracking-tight">AI</span>
+          <div className="relative w-28 h-28 rounded-3xl bg-gradient-to-br from-primary-500 via-primary-400 to-purple-600 flex items-center justify-center shadow-2xl shadow-primary-500/30 border border-white/20 backdrop-blur-sm overflow-hidden">
+            {/* Inner pattern */}
+            <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0djItSDI0di0yaDEyek0zNiAyNHYySDI0di0yaDEyeiIvPjwvZz48L2c+PC9zdmc+')] opacity-30"></div>
+            <span className="text-white font-bold text-4xl tracking-tight relative z-10">AI</span>
             
             {/* Corner decorations */}
-            <div className="absolute -top-1 -right-1 w-6 h-6 bg-emerald-400 rounded-full border-2 border-dark-900 flex items-center justify-center shadow-lg">
-              <span className="text-[10px] font-bold text-dark-900">✓</span>
+            <div className="absolute -top-1 -right-1 w-7 h-7 bg-gradient-to-br from-emerald-400 to-green-500 rounded-full border-2 border-dark-900 flex items-center justify-center shadow-lg shadow-emerald-500/50">
+              <Sparkles size={12} className="text-dark-900" />
             </div>
           </div>
         </div>
 
-        {/* Title */}
-        <h1 className="text-4xl font-bold mb-3">
-          <span className="gradient-text">Welcome to CodeMate</span>
+        {/* Title with gradient */}
+        <h1 className="text-5xl font-bold mb-4 tracking-tight">
+          <span className="bg-gradient-to-r from-white via-primary-200 to-purple-300 bg-clip-text text-transparent">
+            CodeMate
+          </span>
         </h1>
 
         {/* Subtitle */}
-        <p className="text-dark-400 text-base leading-relaxed max-w-md mx-auto">
-          Your fully offline AI coding assistant. No internet, no data sent to external servers.
-          Everything runs locally on your machine with complete privacy.
+        <p className="text-dark-300 text-lg leading-relaxed max-w-md mx-auto mb-2">
+          Your fully offline AI coding assistant
+        </p>
+        <p className="text-dark-500 text-sm leading-relaxed max-w-sm mx-auto">
+          No internet required. Complete privacy. Everything runs locally.
         </p>
         
-        {/* Status badges */}
-        <div className="flex items-center justify-center gap-3 mt-5">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-medium ring-1 ring-emerald-500/25">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        {/* Status badges - Enhanced */}
+        <div className="flex items-center justify-center gap-3 mt-6 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-semibold ring-1 ring-emerald-500/25 backdrop-blur-sm">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400/50"></span>
             100% Offline
           </span>
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/15 text-purple-400 text-xs font-medium ring-1 ring-purple-500/25">
-            🔒 Private & Secure
+          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-purple-500/15 text-purple-400 text-xs font-semibold ring-1 ring-purple-500/25 backdrop-blur-sm">
+            <Shield size={12} />
+            Private & Secure
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-500/15 text-blue-400 text-xs font-semibold ring-1 ring-blue-500/25 backdrop-blur-sm">
+            <Brain size={12} />
+            Smart Memory
           </span>
         </div>
       </div>
@@ -200,6 +219,53 @@ export default function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
               </div>
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Memory System Section */}
+      <div className="max-w-2xl w-full mb-10 relative z-10">
+        <div className="glass-card p-6 aurora-border">
+          <div className="flex items-start gap-4">
+            <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 shrink-0">
+              <Brain size={24} className="text-purple-400" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-base font-semibold text-white mb-1 flex items-center gap-2">
+                Project Memory System
+                <span className="px-2 py-0.5 text-[10px] font-medium bg-primary-500/20 text-primary-300 rounded-full">NEW</span>
+              </h3>
+              <p className="text-sm text-dark-400 leading-relaxed mb-4">
+                CodeMate learns from your interactions and remembers project context. 
+                It understands your preferences, coding style, and project architecture.
+              </p>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+                {[
+                  { icon: '📝', label: 'CODEMATE.md', desc: 'Project instructions' },
+                  { icon: '🧠', label: 'Auto-Learn', desc: 'From conversations' },
+                  { icon: '🎯', label: 'Skills', desc: '8 built-in skills' },
+                  { icon: '⚙️', label: 'Preferences', desc: 'Your settings' },
+                ].map((item) => (
+                  <div key={item.label} className="p-2.5 rounded-lg bg-dark-800/60 border border-dark-700/50 text-center">
+                    <span className="text-lg">{item.icon}</span>
+                    <p className="text-[11px] font-medium text-dark-300 mt-1">{item.label}</p>
+                    <p className="text-[10px] text-dark-500">{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={() => toggleMemoryPanel()}
+                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-600 hover:to-pink-600 text-white text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-purple-600/25 hover:shadow-purple-600/40"
+              >
+                <Brain size={16} />
+                Open Memory Panel
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

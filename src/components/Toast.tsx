@@ -4,10 +4,14 @@ import { createRoot, Root } from 'react-dom/client';
 // Types
 export interface Toast {
   id: string;
-  type: 'success' | 'error' | 'warning' | 'info';
+  type: 'success' | 'error' | 'warning' | 'info' | 'loading';
   title: string;
   message?: string;
   duration?: number;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
 }
 
 interface ToastContextType {
@@ -55,7 +59,15 @@ function ToastIcon({ type }: { type: Toast['type'] }) {
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
+    loading: (
+      <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <circle cx="12" cy="12" r="10" strokeWidth={3} className="opacity-25" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v3m4 0v6m0 4v3" />
+      </svg>
+    ),
   };
+
+  return icons[type] as React.ReactNode;
 
   return icons[type];
 }
@@ -88,6 +100,13 @@ const colorStyles = {
     icon: 'text-blue-400',
     text: 'text-blue-200',
     progress: 'bg-gradient-to-r from-blue-400 to-blue-600',
+  },
+  loading: {
+    bg: 'primary-500/10',
+    border: 'border-primary-500/30',
+    icon: 'text-primary-400 animate-spin',
+    text: 'text-primary-200',
+    progress: 'bg-gradient-to-r from-primary-400 to-primary-600',
   },
 };
 

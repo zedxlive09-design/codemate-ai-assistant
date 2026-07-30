@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { fileCommands } from '../lib/tauri';
+import { Brain, Search, Tag, Clock, X, Filter, Pin } from 'lucide-react';
 
 // Format date for display
 function formatDate(date: Date | string | number): string {
@@ -33,7 +34,13 @@ export default function Sidebar() {
     setActiveConversation,
     projectPath,
     setProjectPath,
+    toggleMemoryPanel,
+    showMemoryPanel,
+    pinnedConversationIds,
+    togglePinConversation,
   } = useStore();
+
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleNewChat = () => {
     createConversation();
@@ -50,10 +57,28 @@ export default function Sidebar() {
     return formatRelativeTime(new Date(date));
   };
 
-  // Sort conversations by most recently updated
-  const sortedConversations = [...conversations].sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  );
+  // Sort conversations: pinned first, then by most recently updated
+  const sortedConversations = [...conversations].sort((a, b) => {
+    const aPinned = pinnedConversationIds.includes(a.id);
+    const bPinned = pinnedConversationIds.includes(b.id);
+    if (aPinned && !bPinned) return -1;
+    if (!aPinned && bPinned) return 1;
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  });
+
+  // Filter conversations based on search query
+  const filteredConversations = searchQuery.trim() 
+    ? sortedConversations.filter(conv => 
+        conv.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        conv.messages.some((m: any) => 
+          m.content.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      )
+    : sortedConversations;
+
+  // Separate pinned and unpinned for display
+  const pinnedConversations = filteredConversations.filter(c => pinnedConversationIds.includes(c.id));
+  const unpinnedConversations = filteredConversations.filter(c => !pinnedConversationIds.includes(c.id));
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-dark-900/90 to-dark-900/70">
@@ -124,9 +149,31 @@ export default function Sidebar() {
         </h3>
         {conversations.length > 0 && (
           <span className="text-[10px] bg-dark-800 text-dark-400 px-2 py-0.5 rounded-full">
-            {conversations.length}
+            {filteredConversations.length}/{conversations.length}
           </span>
         )}
+      </div>
+
+      {/* Search Input */}
+      <div className="px-4 pb-2">
+        <div className="relative group">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-500 group-focus-within:text-primary-400 transition-colors" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search conversations..."
+            className="w-full pl-9 pr-8 py-2 bg-dark-800/60 border border-dark-700/50 rounded-lg text-xs text-dark-200 placeholder-dark-600 focus:outline-none focus:border-primary-500/50 focus:bg-dark-800/80 transition-all"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-dark-700 text-dark-500 hover:text-dark-300 transition-colors"
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Conversations List */}
@@ -153,10 +200,58 @@ export default function Sidebar() {
               Create your first chat →
             </button>
           </div>
+        ) : filteredConversations.length === 0 ? (
+          /* No search results state */
+          <div className="text-center py-10 px-4">
+            <div className="w-14 h-14 mx-auto mb-3 relative">
+              <div className="relative w-14 h-14 rounded-full bg-dark-800/80 border border-dark-700 flex items-center justify-center">
+                <Search size={20} className="text-dark-500" />
+              </div>
+            </div>
+            <p className="text-sm font-medium text-dark-400 mb-1">No results found</p>
+            <p className="text-xs text-dark-600 mb-3">Try a different search term</p>
+            <button
+              onClick={() => setSearchQuery('')}
+              className="text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
+            >
+              Clear search
+            </button>
+          </div>
         ) : (
-          /* Conversation list */
+          /* Conversation list - filtered with pinned section */
           <div className="space-y-1">
-            {sortedConversations.map((conversation, index) => (
+            {/* Pinned Conversations Section */}
+            {pinnedConversations.length > 0 && (
+              <>
+                <div className="flex items-center gap-2 px-3 py-2 text-[10px] font-bold text-dark-500 uppercase tracking-wider sticky top-0 bg-dark-900/95 backdrop-blur-sm z-10">
+                  <Pin size={10} className="text-primary-400" />
+                  Pinned ({pinnedConversations.length})
+                </div>
+                {pinnedConversations.map((conversation, index) => (
+                  <ConversationItem
+                    key={conversation.id}
+                    conversation={conversation}
+                    isActive={conversation.id === activeConversationId}
+                    index={index}
+                    onSelect={() => setActiveConversation(conversation.id)}
+                    onDelete={() => deleteConversation(conversation.id)}
+                    onTogglePin={() => togglePinConversation(conversation.id)}
+                    isPinned={true}
+                    searchQuery={searchQuery}
+                  />
+                ))}
+                
+                {/* Separator */}
+                {unpinnedConversations.length > 0 && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-dark-600 uppercase tracking-wider sticky top-6 bg-dark-900/95 backdrop-blur-sm z-10 border-t border-dark-800/50 mt-1 pt-2">
+                    Recent
+                  </div>
+                )}
+              </>
+            )}
+            
+            {/* Unpinned/Recent Conversations */}
+            {unpinnedConversations.map((conversation, index) => (
               <ConversationItem
                 key={conversation.id}
                 conversation={conversation}
@@ -164,6 +259,9 @@ export default function Sidebar() {
                 index={index}
                 onSelect={() => setActiveConversation(conversation.id)}
                 onDelete={() => deleteConversation(conversation.id)}
+                onTogglePin={() => togglePinConversation(conversation.id)}
+                isPinned={false}
+                searchQuery={searchQuery}
               />
             ))}
           </div>
@@ -185,6 +283,30 @@ export default function Sidebar() {
           
           <StatusIndicator />
         </div>
+
+        {/* Quick Action Buttons */}
+        <div className="flex items-center gap-2 mt-3">
+          <button
+            onClick={() => toggleMemoryPanel()}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-medium transition-all duration-200 ${
+              showMemoryPanel 
+                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' 
+                : 'bg-dark-800/60 text-dark-400 hover:text-white hover:bg-dark-700/70 border border-dark-700/50'
+            }`}
+            title="Project Memory & Context"
+          >
+            <Brain size={14} className={showMemoryPanel ? 'text-purple-400' : ''} />
+            <span>Memory</span>
+          </button>
+          
+          <button
+            onClick={() => {}}
+            className="flex items-center justify-center w-9 h-9 rounded-lg bg-dark-800/60 text-dark-400 hover:text-white hover:bg-dark-700/70 border border-dark-700/50 transition-all duration-200"
+            title="Search Conversations"
+          >
+            <Search size={14} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -197,12 +319,18 @@ function ConversationItem({
   index,
   onSelect,
   onDelete,
+  onTogglePin,
+  isPinned = false,
+  searchQuery = '',
 }: {
   conversation: any; // Conversation type from store
   isActive: boolean;
   index: number;
   onSelect: () => void;
   onDelete: () => void;
+  onTogglePin?: () => void;
+  isPinned?: boolean;
+  searchQuery?: string;
 }) {
   // Get last message preview
   const lastMessage = conversation.messages[conversation.messages.length - 1];
@@ -213,21 +341,38 @@ function ConversationItem({
   // Count user vs assistant messages
   const userMessageCount = conversation.messages.filter((m: any) => m.role === 'user').length;
 
+  // Highlight matching text
+  const highlightText = (text: string, query: string) => {
+    if (!query) return text;
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const parts = text.split(regex);
+    return parts.map((part, i) => 
+      regex.test(part) 
+        ? `<mark class="bg-primary-500/30 text-primary-300 rounded px-0.5">${part}</mark>` 
+        : part
+    ).join('');
+  };
+
   return (
     <div
       onClick={onSelect}
       className={`
         group relative p-3 rounded-xl cursor-pointer transition-all duration-200
-        ${isActive 
-          ? 'bg-gradient-to-r from-primary-600/15 to-primary-500/5 border border-primary-500/30 shadow-sm' 
-          : 'hover:bg-dark-800/60 border border-transparent hover:border-dark-700/30'
+        ${isPinned 
+          ? 'bg-gradient-to-r from-amber-500/10 to-transparent border border-amber-500/20 hover:border-amber-400/40' 
+          : isActive 
+            ? 'bg-gradient-to-r from-primary-600/15 to-primary-500/5 border border-primary-500/30 shadow-sm' 
+            : 'hover:bg-dark-800/60 border border-transparent hover:border-dark-700/30'
         }
       `}
       style={{ animationDelay: `${index * 50}ms` }}
     >
-      {/* Active indicator */}
-      {isActive && (
+      {/* Active/Pinned indicator */}
+      {isActive && !isPinned && (
         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary-500 rounded-r-full"></div>
+      )}
+      {isPinned && (
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-amber-400 rounded-r-full"></div>
       )}
 
       <div className="flex items-start justify-between gap-2 pl-1">
@@ -236,9 +381,9 @@ function ConversationItem({
           <div className="flex items-center gap-2 mb-1">
             <p className={`font-medium text-sm truncate ${
               isActive ? 'text-white' : 'text-dark-200'
-            }`}>
-              {conversation.title}
-            </p>
+            }`}
+            dangerouslySetInnerHTML={{ __html: highlightText(conversation.title, searchQuery) }}
+            />
             
             {/* Message count badge */}
             {userMessageCount > 0 && (
@@ -272,36 +417,57 @@ function ConversationItem({
           {lastMessage && (
             <p className={`text-xs line-clamp-2 leading-relaxed ${
               isActive ? 'text-dark-400' : 'text-dark-600'
-            }`}>
-              {lastMessage.role === 'user' ? (
-                <span className="text-dark-500 mr-1">You:</span>
-              ) : (
-                <span className="text-primary-500/60 mr-1">AI:</span>
-              )}
-              {messagePreview}
-            </p>
+            }`}
+            dangerouslySetInnerHTML={{ __html: 
+              (lastMessage.role === 'user' ? '<span class="text-dark-500 mr-1">You:</span>' : '<span class="text-primary-500/60 mr-1">AI:</span>') +
+              highlightText(messagePreview, searchQuery)
+            }}
+            />
           )}
         </div>
         
-        {/* Delete button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            if (confirm('Delete this conversation?')) {
-              onDelete();
-            }
-          }}
-          className={`shrink-0 p-1.5 -mr-1 -mt-1 rounded-lg transition-all duration-150 ${
-            isActive 
-              ? 'opacity-100 text-dark-400 hover:text-red-400 hover:bg-red-500/10' 
-              : 'opacity-0 group-hover:opacity-100 text-dark-600 hover:text-red-400 hover:bg-dark-700/50'
-          }`}
-          title="Delete conversation"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-        </button>
+        {/* Action buttons */}
+        <div className="flex items-center gap-0.5 shrink-0 -mr-1 -mt-1">
+          {/* Pin button */}
+          {onTogglePin && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onTogglePin();
+              }}
+              className={`p-1.5 rounded-lg transition-all duration-150 ${
+                isPinned 
+                  ? 'opacity-100 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10' 
+                  : isActive 
+                    ? 'opacity-100 text-dark-400 hover:text-amber-400 hover:bg-dark-700/50' 
+                    : 'opacity-0 group-hover:opacity-100 text-dark-600 hover:text-amber-400 hover:bg-dark-700/50'
+              }`}
+              title={isPinned ? 'Unpin conversation' : 'Pin conversation'}
+            >
+              <Pin size={14} className={isPinned ? 'fill-current' : ''} />
+            </button>
+          )}
+          
+          {/* Delete button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (confirm('Delete this conversation?')) {
+                onDelete();
+              }
+            }}
+            className={`shrink-0 p-1.5 rounded-lg transition-all duration-150 ${
+              isActive 
+                ? 'opacity-100 text-dark-400 hover:text-red-400 hover:bg-red-500/10' 
+                : 'opacity-0 group-hover:opacity-100 text-dark-600 hover:text-red-400 hover:bg-dark-700/50'
+            }`}
+            title="Delete conversation"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );

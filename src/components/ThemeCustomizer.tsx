@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
+import { Palette, Sparkles, RotateCcw, Eye, Download, Upload, Check, Star, Zap } from 'lucide-react';
 
 interface ColorPreset {
   name: string;
@@ -10,9 +11,23 @@ interface ColorPreset {
   surface: string;
   text: string;
   gradient: string;
+  category?: 'default' | 'popular' | 'neon' | 'nature' | 'warm' | 'cool';
+  isPremium?: boolean;
 }
 
 const colorPresets: ColorPreset[] = [
+  // Default/Popular
+  {
+    name: 'CodeMate',
+    primary: '#6366f1',
+    secondary: '#8b5cf6',
+    accent: '#a78bfa',
+    background: '#0d1117',
+    surface: '#161b22',
+    text: '#e6edf3',
+    gradient: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+    category: 'default',
+  },
   {
     name: 'Ocean Blue',
     primary: '#0ea5e9',
@@ -22,6 +37,7 @@ const colorPresets: ColorPreset[] = [
     surface: '#1e293b',
     text: '#e2e8f0',
     gradient: 'linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%)',
+    category: 'popular',
   },
   {
     name: 'Purple Haze',
@@ -32,36 +48,33 @@ const colorPresets: ColorPreset[] = [
     surface: '#2d1b4e',
     text: '#e2e8f0',
     gradient: 'linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%)',
+    category: 'popular',
+    isPremium: true,
+  },
+  
+  // Neon/Cyber
+  {
+    name: 'Cyberpunk',
+    primary: '#f472b6',
+    secondary: '#06b6d4',
+    accent: '#a855f7',
+    background: '#0a0a0f',
+    surface: '#151520',
+    text: '#f0f0ff',
+    gradient: 'linear-gradient(135deg, #f472b6 0%, #06b6d4 50%, #a855f7 100%)',
+    category: 'neon',
+    isPremium: true,
   },
   {
-    name: 'Emerald Forest',
-    primary: '#10b981',
-    secondary: '#059669',
-    accent: '#34d399',
-    background: '#0a1a15',
-    surface: '#14261f',
-    text: '#e2e8f0',
-    gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-  },
-  {
-    name: 'Rose Pink',
-    primary: '#f43f5e',
-    secondary: '#ec4899',
-    accent: '#fb7185',
-    background: '#1a0a10',
-    surface: '#3b1525',
-    text: '#e2e8f0',
-    gradient: 'linear-gradient(135deg, #f43f5e 0%, #ec4899 100%)',
-  },
-  {
-    name: 'Amber Glow',
-    primary: '#f59e0b',
-    secondary: '#d97706',
-    accent: '#fbbf24',
-    background: '#1a1505',
-    surface: '#332a10',
-    text: '#e2e8f0',
-    gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+    name: 'Matrix',
+    primary: '#00ff41',
+    secondary: '#008f11',
+    accent: '#39ff14',
+    background: '#000a00',
+    surface: '#001a00',
+    text: '#00ff41',
+    gradient: 'linear-gradient(135deg, #00ff41 0%, #008f11 100%)',
+    category: 'neon',
   },
   {
     name: 'Cyan Neon',
@@ -72,16 +85,67 @@ const colorPresets: ColorPreset[] = [
     surface: '#0a252a',
     text: '#e2e8f0',
     gradient: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
+    category: 'neon',
+  },
+  
+  // Nature
+  {
+    name: 'Emerald Forest',
+    primary: '#10b981',
+    secondary: '#059669',
+    accent: '#34d399',
+    background: '#0a1a15',
+    surface: '#14261f',
+    text: '#e2e8f0',
+    gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+    category: 'nature',
   },
   {
-    name: 'Midnight',
-    primary: '#6366f1',
-    secondary: '#4f46e5',
-    accent: '#818cf8',
-    background: '#090912',
-    surface: '#13132b',
+    name: 'Forest Night',
+    primary: '#22c55e',
+    secondary: '#16a34a',
+    accent: '#4ade80',
+    background: '#071208',
+    surface: '#0f1f12',
+    text: '#dcfce7',
+    gradient: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+    category: 'nature',
+  },
+  
+  // Warm
+  {
+    name: 'Amber Glow',
+    primary: '#f59e0b',
+    secondary: '#d97706',
+    accent: '#fbbf24',
+    background: '#1a1505',
+    surface: '#332a10',
     text: '#e2e8f0',
-    gradient: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+    gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+    category: 'warm',
+  },
+  {
+    name: 'Rose Pink',
+    primary: '#f43f5e',
+    secondary: '#ec4899',
+    accent: '#fb7185',
+    background: '#1a0a10',
+    surface: '#3b1525',
+    text: '#e2e8f0',
+    gradient: 'linear-gradient(135deg, #f43f5e 0%, #ec4899 100%)',
+    category: 'warm',
+    isPremium: true,
+  },
+  {
+    name: 'Sunset',
+    primary: '#f97316',
+    secondary: '#ef4444',
+    accent: '#fbbf24',
+    background: '#140a05',
+    surface: '#2a1508',
+    text: '#fef3c7',
+    gradient: 'linear-gradient(135deg, #f97316 0%, #ef4444 100%)',
+    category: 'warm',
   },
   {
     name: 'Sakura',
@@ -92,6 +156,31 @@ const colorPresets: ColorPreset[] = [
     surface: '#2d1520',
     text: '#e2e8f0',
     gradient: 'linear-gradient(135deg, #fb7185 0%, #f472b6 100%)',
+    category: 'warm',
+  },
+  
+  // Cool
+  {
+    name: 'Midnight',
+    primary: '#6366f1',
+    secondary: '#4f46e5',
+    accent: '#818cf8',
+    background: '#090912',
+    surface: '#13132b',
+    text: '#e2e8f0',
+    gradient: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+    category: 'cool',
+  },
+  {
+    name: 'Arctic',
+    primary: '#38bdf8',
+    secondary: '#60a5fa',
+    accent: '#93c5fd',
+    background: '#0c1419',
+    surface: '#162030',
+    text: '#f0f9ff',
+    gradient: 'linear-gradient(135deg, #38bdf8 0%, #60a5fa 100%)',
+    category: 'cool',
   },
 ];
 

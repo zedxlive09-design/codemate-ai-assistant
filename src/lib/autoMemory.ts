@@ -10,9 +10,10 @@
  * Memory is stored in .codemate/memory/ directory as markdown files.
  */
 
-import { readTextFile, writeTextFile, exists, mkdir, readDir } from '@tauri-apps/plugin-fs';
+import { readTextFile, writeTextFile, exists, mkdir } from '@tauri-apps/plugin-fs';
 import { invoke } from '@tauri-apps/api/core';
 import type { MemoryEntry, UserPreferences, ProjectContext } from './projectMemory';
+import { DEFAULT_PREFERENCES } from './projectMemory';
 
 // ============================================================
 // TYPES
@@ -166,7 +167,7 @@ export async function saveMemory(
       `${memoryPath}/index.json`,
       JSON.stringify({
         version: 1,
-        created: (await readTextFile(`${memoryPath}/index.json`)).then(JSON.parse).then(d => d.created) || new Date().toISOString(),
+        created: new Date().toISOString(), // Use current time if file doesn't exist
         memories: existingMemories.map(m => ({
           ...m,
           createdAt: m.createdAt.toISOString(),

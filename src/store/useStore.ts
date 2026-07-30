@@ -52,6 +52,7 @@ interface AppState {
   showNotifications: boolean;
   showStatsPanel: boolean;
   showProfilePanel: boolean;
+  showMemoryPanel: boolean;
   
   // App Settings
   settings: AppSettings;
@@ -110,11 +111,21 @@ interface AppState {
   toggleNotifications: () => void;
   toggleStatsPanel: () => void;
   toggleProfilePanel: () => void;
+  toggleMemoryPanel: () => void;
   
   // Bookmarks
   addBookmark: (conversationId: string, messageId: string) => void;
   removeBookmark: (messageId: string) => void;
   bookmarks: string[];
+  
+  // Pinned Conversations
+  pinnedConversationIds: string[];
+  togglePinConversation: (id: string) => void;
+  
+  // Conversation Tags
+  conversationTags: Record<string, string[]>; // conversationId -> tagIds
+  addTagToConversation: (conversationId: string, tagId: string) => void;
+  removeTagFromConversation: (conversationId: string, tagId: string) => void;
   
   // Actions - Settings
   updateSettings: (settings: Partial<AppSettings>) => void;
@@ -181,8 +192,11 @@ export const useStore = create<AppState>()(
   showNotifications: false,
   showStatsPanel: false,
   showProfilePanel: false,
+  showMemoryPanel: false,
       
       bookmarks: [],
+      pinnedConversationIds: [],
+      conversationTags: {},
       
       settings: defaultSettings,
 
@@ -412,6 +426,10 @@ export const useStore = create<AppState>()(
         set((state) => ({ showProfilePanel: !state.showProfilePanel }));
       },
 
+      toggleMemoryPanel: () => {
+        set((state) => ({ showMemoryPanel: !state.showMemoryPanel }));
+      },
+
       // Bookmarks actions
       addBookmark: (_conversationId: string, messageId: string) => {
         set((state) => ({
@@ -422,6 +440,34 @@ export const useStore = create<AppState>()(
       removeBookmark: (messageId: string) => {
         set((state) => ({
           bookmarks: state.bookmarks.filter(id => id !== messageId),
+        }));
+      },
+
+      // Pinned Conversations
+      togglePinConversation: (id: string) => {
+        set((state) => ({
+          pinnedConversationIds: state.pinnedConversationIds.includes(id)
+            ? state.pinnedConversationIds.filter(pinId => pinId !== id)
+            : [...state.pinnedConversationIds, id],
+        }));
+      },
+
+      // Conversation Tags
+      addTagToConversation: (conversationId: string, tagId: string) => {
+        set((state) => ({
+          conversationTags: {
+            ...state.conversationTags,
+            [conversationId]: [...(state.conversationTags[conversationId] || []), tagId].filter((t, i, arr) => arr.indexOf(t) === i),
+          },
+        }));
+      },
+
+      removeTagFromConversation: (conversationId: string, tagId: string) => {
+        set((state) => ({
+          conversationTags: {
+            ...state.conversationTags,
+            [conversationId]: (state.conversationTags[conversationId] || []).filter(t => t !== tagId),
+          },
         }));
       },
     }),

@@ -23,6 +23,8 @@ import ModelDownloadManager from './components/ModelDownloadManager';
 import NotificationCenter from './components/NotificationCenter';
 import StatsDashboard from './components/StatsDashboard';
 import ProfilePanel from './components/ProfilePanel';
+import MemoryPanel from './components/MemoryPanel';
+import OnboardingWizard, { useShouldShowOnboarding } from './components/OnboardingWizard';
 import { ToastProvider } from './components/Toast';
 import { useStore } from './store/useStore';
 import { useCommandPalette } from './components/CommandPalette';
@@ -50,6 +52,7 @@ export default function App() {
     showNotifications,
     showStatsPanel,
     showProfilePanel,
+    showMemoryPanel,
     isGenerating,
     toggleSidebar,
     toggleSettings,
@@ -71,7 +74,8 @@ export default function App() {
     toggleModelDownloads,
     toggleNotifications,
     toggleStatsPanel,
-    toggleProfilePanel
+    toggleProfilePanel,
+    toggleMemoryPanel
   } = useStore();
 
   const { isOpen: isPaletteOpen, setIsOpen: setIsPaletteOpen } = useCommandPalette();
@@ -80,6 +84,7 @@ export default function App() {
   // State for modal panels
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useShouldShowOnboarding();
 
   // Voice input transcript handler
   const handleVoiceTranscript = useCallback((text: string) => {
@@ -126,6 +131,12 @@ export default function App() {
       if (isMod && e.key === 'm' && !e.shiftKey) {
         e.preventDefault();
         toggleModelManager();
+      }
+
+      // Memory Panel (Ctrl+Shift+M)
+      if (isMod && e.shiftKey && e.key === 'M') {
+        e.preventDefault();
+        toggleMemoryPanel();
       }
 
       // Terminal
@@ -398,7 +409,7 @@ export default function App() {
             showConversationManager || showSnippetsPanel || showGitPanel || 
             showCodeEditor || showVoiceInput || showBookmarks ||
             showThemeCustomizer || showQuickActions || showPluginManager || showAISettings ||
-            showProfilePanel) && (
+            showProfilePanel || showMemoryPanel) && (
             <div className="absolute top-14 right-0 w-96 bottom-7 pointer-events-auto slide-left overflow-y-auto custom-scrollbar">
               {/* Stack of panels based on priority */}
               {showProfilePanel && (
@@ -476,6 +487,11 @@ export default function App() {
                   <BookmarkManager isOpen={showBookmarks} onClose={() => toggleBookmarks()} />
                 </div>
               )}
+              {showMemoryPanel && (
+                <div className="m-2 glass-card aurora-border">
+                  <MemoryPanel isOpen={showMemoryPanel} onClose={() => toggleMemoryPanel()} projectPath={undefined} />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -498,6 +514,14 @@ export default function App() {
           isOpen={showNotificationModal} 
           onClose={() => setShowNotificationModal(false)} 
         />
+
+        {/* Onboarding Wizard - Shows for first-time users */}
+        {showOnboarding && (
+          <OnboardingWizard
+            isOpen={showOnboarding}
+            onClose={() => setShowOnboarding(false)}
+          />
+        )}
       </div>
     </ToastProvider>
   );

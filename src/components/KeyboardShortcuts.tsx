@@ -33,6 +33,7 @@ const shortcutCategories = [
       { keys: ['Ctrl', 'B'], description: 'Toggle Sidebar' },
       { keys: ['Ctrl', 'E'], description: 'Toggle File Explorer' },
       { keys: ['Ctrl', 'M'], description: 'Open Model Manager' },
+      { keys: ['Ctrl', 'Shift', 'M'], description: 'Open Memory Panel' },
       { keys: ['Alt', '↑ / ↓'], description: 'Navigate Messages' },
     ],
   },
@@ -44,6 +45,16 @@ const shortcutCategories = [
       { keys: ['Ctrl', 'F'], description: 'Search in Current File' },
       { keys: ['Ctrl', 'H'], description: 'Find and Replace' },
       { keys: ['Ctrl', 'D'], description: 'Duplicate Line' },
+    ],
+  },
+  {
+    title: 'Memory & AI',
+    icon: '🧠',
+    shortcuts: [
+      { keys: ['Ctrl', 'Shift', 'M'], description: 'Toggle Memory Panel' },
+      { keys: ['Ctrl', 'Shift', ','], description: 'AI Settings' },
+      { keys: ['Ctrl', 'Shift', 'A'], description: 'Activity Panel' },
+      { keys: ['Ctrl', 'Alt', 'S'], description: 'Stats Dashboard' },
     ],
   },
 ];
