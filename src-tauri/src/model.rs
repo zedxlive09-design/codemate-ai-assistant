@@ -21,6 +21,7 @@ pub struct ModelState {
 }
 
 /// Represents a loaded/selected LLM model
+#[derive(Clone)]
 pub struct LoadedModel {
     pub name: String,
     pub path: String,  // Model name for Ollama (e.g., "llama3.2:latest")
