@@ -338,18 +338,16 @@ pub struct ModelValidationResult {
 
 /// Check if Ollama is available
 #[tauri::command]
-pub async fn check_ollama_available() -> Result<OllamaStatus, String> {
+pub fn check_ollama_available() -> Result<OllamaStatus, String> {
     match check_ollama_status() {
         Ok(()) => {
-            // Get version info
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            let version = rt.block_on(async {
-                let client = reqwest::Client::new();
-                match client.get(format!("{}/api/version", crate::model::OLLAMA_BASE_URL)).send().await {
-                    Ok(resp) => resp.json::<serde_json::Value>().await.ok(),
-                    Err(_) => None,
-                }
-            });
+            // Get version info using blocking client
+            let client = reqwest::blocking::Client::new();
+            let version = client
+                .get(format!("{}/api/version", crate::model::OLLAMA_BASE_URL))
+                .send()
+                .ok()
+                .and_then(|resp| resp.json::<serde_json::Value>().ok());
             
             Ok(OllamaStatus {
                 available: true,
@@ -428,34 +426,31 @@ pub async fn get_inference_system_info() -> Result<InferenceSystemInfo, String> 
 
 /// Get detailed GPU info (via Ollama's detection)
 #[tauri::command]
-pub async fn get_gpu_info() -> Result<GpuInfo, String> {
-    // Try to get GPU info from Ollama
-    let rt = tokio::runtime::Runtime::new().unwrap();
+pub fn get_gpu_info() -> Result<GpuInfo, String> {
+    // Try to get GPU info from Ollama using blocking client
+    let client = reqwest::blocking::Client::new();
     
-    rt.block_on(async {
-        let client = reqwest::Client::new();
-        match client.get(format!("{}/api/gpu", crate::model::OLLAMA_BASE_URL)).send().await {
-            Ok(resp) if resp.status().is_success() => {
-                match resp.json::<serde_json::Value>().await {
-                    Ok(info) => {
-                        // Parse Ollama GPU info
-                        Ok(GpuInfo {
-                            available: true,
-                            name: info.get("name").and_then(|v| v.as_str()).unwrap_or("GPU").to_string(),
-                            vendor: info.get("vendor").and_then(|v| v.as_str()).unwrap_or("Unknown").to_string(),
-                            vramGb: info.get("vram").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                            driverVersion: info.get("driver_version").and_then(|v| v.as_str()).map(String::from),
-                            computeCapability: None,
-                            supportedBackends: vec!["CUDA".to_string(), "Vulkan".to_string()],
-                            recommendedLayers: info.get("recommended_layers").and_then(|v| v.as_u64()).map(|l| l as u32),
-                        })
-                    }
-                    Err(_) => Ok(default_gpu_info())
+    match client.get(format!("{}/api/gpu", crate::model::OLLAMA_BASE_URL)).send() {
+        Ok(resp) if resp.status().is_success() => {
+            match resp.json::<serde_json::Value>() {
+                Ok(info) => {
+                    // Parse Ollama GPU info
+                    Ok(GpuInfo {
+                        available: true,
+                        name: info.get("name").and_then(|v| v.as_str()).unwrap_or("GPU").to_string(),
+                        vendor: info.get("vendor").and_then(|v| v.as_str()).unwrap_or("Unknown").to_string(),
+                        vramGb: info.get("vram").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                        driverVersion: info.get("driver_version").and_then(|v| v.as_str()).map(String::from),
+                        computeCapability: None,
+                        supportedBackends: vec!["CUDA".to_string(), "Vulkan".to_string()],
+                        recommendedLayers: info.get("recommended_layers").and_then(|v| v.as_u64()).map(|l| l as u32),
+                    })
                 }
+                Err(_) => Ok(default_gpu_info())
             }
-            _ => Ok(default_gpu_info())
         }
-    })
+        _ => Ok(default_gpu_info())
+    }
 }
 
 fn default_gpu_info() -> GpuInfo {

@@ -529,9 +529,36 @@ pub fn generate_text(
     model: &LoadedModel,
     _on_token: impl Fn(GenerationProgress) -> (),
 ) -> Result<String, String> {
-    // This is a sync wrapper - in practice, use the async versions
-    let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
-    rt.block_on(generate_text_async(prompt, settings, model))
+    // Use blocking client for sync context
+    let client = reqwest::blocking::Client::new();
+    let url = format!("{}/api/generate", OLLAMA_BASE_URL);
+    
+    let request = serde_json::json!({
+        "model": model.path,
+        "prompt": prompt,
+        "stream": false,
+        "options": {
+            "temperature": settings.temperature,
+            "top_p": settings.top_p,
+            "top_k": settings.top_k,
+            "num_predict": settings.max_tokens
+        }
+    });
+    
+    let response = client.post(&url).json(&request).send()
+        .map_err(|e| format!("Failed to send request: {}", e))?;
+    
+    if !response.status().is_success() {
+        return Err(format!("Ollama error: {}", response.status()));
+    }
+    
+    let result: serde_json::Value = response.json()
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+    
+    result.get("response")
+        .and_then(|r| r.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| "No response in result".to_string())
 }
 
 // ============================================================================
@@ -540,42 +567,34 @@ pub fn generate_text(
 
 /// List all models available in Ollama
 fn list_ollama_models() -> Result<Vec<OllamaModelInfo>, String> {
-    let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+    let client = reqwest::blocking::Client::new();
+    let url = format!("{}/api/tags", OLLAMA_BASE_URL);
     
-    rt.block_on(async {
-        let client = reqwest::Client::new();
-        let url = format!("{}/api/tags", OLLAMA_BASE_URL);
-        
-        match client.get(&url).send().await {
-            Ok(response) => {
-                if response.status().is_success() {
-                    let list: OllamaListResponse = response.json().await
-                        .map_err(|e| format!("Failed to parse model list: {}", e))?;
-                    Ok(list.models)
-                } else {
-                    Err(format!("Ollama returned status: {}", response.status()))
-                }
+    match client.get(&url).send() {
+        Ok(response) => {
+            if response.status().is_success() {
+                let list: OllamaListResponse = response.json()
+                    .map_err(|e| format!("Failed to parse model list: {}", e))?;
+                Ok(list.models)
+            } else {
+                Err(format!("Ollama returned status: {}", response.status()))
             }
-            Err(e) => Err(format!("Cannot connect to Ollama at {}. Is it running? Error: {}", 
-                                  OLLAMA_BASE_URL, e))
         }
-    })
+        Err(e) => Err(format!("Cannot connect to Ollama at {}. Is it running? Error: {}", 
+                              OLLAMA_BASE_URL, e))
+    }
 }
 
 /// Check if Ollama is running and accessible
 pub fn check_ollama_status() -> Result<(), String> {
-    let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+    let client = reqwest::blocking::Client::new();
+    let url = format!("{}/api/tags", OLLAMA_BASE_URL);
     
-    rt.block_on(async {
-        let client = reqwest::Client::new();
-        let url = format!("{}/api/tags", OLLAMA_BASE_URL);
-        
-        match client.get(&url).send().await {
-            Ok(response) if response.status().is_success() => Ok(()),
-            Ok(_) => Err("Ollama responded but with an error".to_string()),
-            Err(e) => Err(format!("Ollama not reachable: {}. Run 'ollama serve' to start.", e))
-        }
-    })
+    match client.get(&url).send() {
+        Ok(response) if response.status().is_success() => Ok(()),
+        Ok(_) => Err("Ollama responded but with an error".to_string()),
+        Err(e) => Err(format!("Ollama not reachable: {}. Run 'ollama serve' to start.", e))
+    }
 }
 
 /// Pull a model from Ollama registry (async operation)
