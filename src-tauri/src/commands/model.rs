@@ -6,6 +6,7 @@
 // - Listing available models
 //
 // PHASE 9: Real LLM Inference Implementation
+// Updated for llama_cpp_rs 0.3.x
 
 use tauri::{AppHandle, Emitter, State};
 use serde::{Deserialize, Serialize};
@@ -166,12 +167,8 @@ pub async fn generate(
         let state = state.lock().map_err(|e| e.to_string())?;
         
         match &state.loaded_model {
-            Some(m) if m.is_real() => {
-                // We have a real model - need to clone it for use in spawn_blocking
-                // Note: llama_cpp_rs types may not implement Clone, so we'll handle this differently
-                (true, m.context_length)
-            }
-            Some(_) => (false, m.context_length), // Stub model
+            Some(m) if m.is_real() => (true, m.context_length),
+            Some(_) => (false, m.context_length),
             None => return Err("No model loaded. Please load a model first.".to_string()),
         }
     };
@@ -184,17 +181,13 @@ pub async fn generate(
     
     // Run generation in blocking thread (CPU-intensive work)
     tokio::task::spawn_blocking(move || {
-        // For non-streaming, we collect all tokens
-        let mut full_text = String::new();
-        
-        // Load fresh model context for this generation
-        let mut loaded = create_loaded_model(&model_path, context_len)?;
+        // Create fresh model for this generation
+        let loaded = create_loaded_model(&model_path, context_len)?;
         
         generate_text(
             &prompt,
             &settings,
-            loaded.get_model().unwrap(), // Safe because we just created it
-            loaded.get_context_mut().unwrap(),
+            &loaded,
             |_progress| {}, // Ignore progress in non-streaming mode
         )
     }).await.map_err(|e| format!("Generation task failed: {}", e))?
@@ -232,15 +225,12 @@ pub async fn generate_streaming(
     // Run streaming generation in blocking thread
     let result = tokio::task::spawn_blocking(move || -> Result<String, String> {
         // Create fresh model context for this generation thread
-        let mut loaded = create_loaded_model(&model_path, context_len)?;
-        
-        let model_ref = loaded.get_model().unwrap().clone(); // This may fail if not cloneable
+        let loaded = create_loaded_model(&model_path, context_len)?;
         
         generate_text(
             &prompt,
             &settings,
-            loaded.get_model().unwrap(),
-            loaded.get_context_mut().unwrap(),
+            &loaded,
             move |progress| {
                 if progress.is_error {
                     let _ = app_clone.emit(EVENT_GENERATION_ERROR, serde_json::json!({
@@ -426,8 +416,8 @@ pub async fn validate_model_file(path: String) -> Result<ModelValidationResult, 
         error: None,
         model_info: Some(ModelInfo {
             name: extract_model_name(&filename),
-            parameters: extract_parameters(&filename),
-            context_length: 4096, // Would need to read from GGUF
+            parameters: extract_parameters(&filename).unwrap_or_else(|| "Unknown".to_string()),
+            context_length: 4096,
             size_bytes: metadata.len(),
             quantization: extract_quantization(&filename),
         }),
@@ -444,9 +434,10 @@ pub struct ModelValidationResult {
 
 /// Validate GGUF file using llama.cpp's own validation
 fn validate_gguf_with_llama(path: &std::path::Path) -> bool {
-    // Use llama_cpp_rs to try loading just the header
-    let params = llama_cpp_rs::ModelParams::default();
-    match llama_cpp_rs::LlamaModel::load_from_file(path, params) {
+    use llama_cpp_rs::params::ModelParams;
+    
+    let params = ModelParams::default();
+    match llama_cpp_rs::model::LlamaModel::load_from_file(path, &params) {
         Ok(_) => true,
         Err(e) => {
             log::debug!(target: "validation", "GGUF validation failed: {}", e);
@@ -499,12 +490,9 @@ pub async fn get_gpu_info() -> Result<GpuInfo, String> {
 
 /// Detect GPU information from the system
 fn detect_gpu_info() -> GpuInfo {
-    // Try multiple methods to detect GPU
-    
     // Method 1: Check for CUDA (NVIDIA)
     #[cfg(feature = "cuda")]
     {
-        // If CUDA feature is enabled, we have GPU support
         return GpuInfo {
             available: true,
             name: "CUDA GPU".to_string(),
@@ -513,7 +501,7 @@ fn detect_gpu_info() -> GpuInfo {
             driverVersion: get_cuda_version(),
             computeCapability: None,
             supportedBackends: vec!["CUDA".to_string()],
-            recommendedLayers: Some(35), // Default recommendation for 7B models
+            recommendedLayers: Some(35),
         };
     }
     
@@ -539,11 +527,11 @@ fn detect_gpu_info() -> GpuInfo {
                 available: true,
                 name: "Apple GPU (Metal)".to_string(),
                 vendor: "Apple".to_string(),
-                vramGb: get_metal_shared_memory(), // Unified memory on Apple Silicon
+                vramGb: get_metal_shared_memory(),
                 driverVersion: Some("Metal".to_string()),
                 computeCapability: None,
                 supportedBackends: vec!["Metal".to_string()],
-                recommendedLayers:: Some(25), // Conservative for unified memory
+                recommendedLayers: Some(25),
             };
         }
     }
@@ -554,11 +542,11 @@ fn detect_gpu_info() -> GpuInfo {
             available: true,
             name: "Vulkan-compatible GPU".to_string(),
             vendor: "Unknown".to_string(),
-            vramGb: 0.0, // Unknown without Vulkan API call
+            vramGb: 0.0,
             driverVersion: None,
             computeCapability: None,
             supportedBackends: vec!["Vulkan".to_string()],
-            recommendedLayers: None, // Don't recommend without knowing VRAM
+            recommendedLayers: None,
         };
     }
     
@@ -577,35 +565,30 @@ fn detect_gpu_info() -> GpuInfo {
 
 /// Estimate NVIDIA VRAM from environment or common values
 fn estimate_nvidia_vram_from_env() -> f64 {
-    // Try reading from nvidia-smi if available
     if let Ok(output) = std::process::Command::new("nvidia-smi")
         .args(["--query-gpu=memory.total", "--format=csv,noheader,nounits"])
         .output() 
     {
         if let Ok(vram_str) = String::from_utf8(output.stdout) {
             if let Ok(vram_mb) = vram_str.trim().parse::<f64>() {
-                return vram_mb / 1024.0; // Convert MB to GB
+                return vram_mb / 1024.0;
             }
         }
     }
     
-    // Return a conservative default
-    8.0 // Assume 8GB if NVIDIA detected but can't read exact value
+    8.0 // Default assumption
 }
 
 #[cfg(target_os = "macos")]
 fn get_metal_shared_memory() -> f64 {
-    // On macOS with Apple Silicon, use system memory as approximation
     let sys = sysinfo::System::new_with_specifics(
         sysinfo::RefreshKind::new().with_memory(sysinfo::MemoryRefreshKind::new())
     );
     sys.refresh_memory();
-    // Use 75% of RAM as safe estimate for GPU memory (unified memory)
     sys.total_memory() as f64 * 0.75 / (1024.0 * 1024.0 * 1024.0)
 }
 
 fn is_vulkan_available() -> bool {
-    // Simple check - look for Vulkan loader
     cfg!(target_os = "linux") && std::path::Path::new("/usr/lib/libvulkan.so.1").exists()
         || std::path::Path::new("/usr/local/lib/libvulkan.so.1").exists()
 }
@@ -622,7 +605,6 @@ pub struct InferenceSystemInfo {
     pub canRun13b: bool,
     pub canRun34b: bool,
     pub canRun70b: bool,
-    /// GPU information (if available)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gpu: Option<GpuInfo>,
 }
@@ -630,30 +612,22 @@ pub struct InferenceSystemInfo {
 /// GPU Information structure
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GpuInfo {
-    /// Whether a compatible GPU was detected
     pub available: bool,
-    /// GPU name/model
     pub name: String,
-    /// GPU vendor (NVIDIA, AMD, Intel, Apple)
     pub vendor: String,
-    /// Available VRAM in GB
     pub vramGb: f64,
-    /// Driver version (if detectable)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub driverVersion: Option<String>,
-    /// Compute capability (for NVIDIA)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub computeCapability: Option<String>,
-    /// Supported backends (CUDA, Metal, Vulkan)
     pub supportedBackends: Vec<String>,
-    /// Recommended number of layers to offload (if known)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recommendedLayers: Option<u32>,
 }
 
 /// Calculate recommended max model parameters based on available RAM
 fn calculate_recommended_max_params(available_ram_gb: f64) -> String {
-    let usable_ram = available_ram_gb - 2.0; // Reserve for OS/context
+    let usable_ram = available_ram_gb - 2.0;
     
     if usable_ram >= 40.0 {
         "70B+ (Q4)".to_string()
