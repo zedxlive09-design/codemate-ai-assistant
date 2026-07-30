@@ -5,7 +5,6 @@
 // - Project analysis (languages, stats, structure)
 // - Code search functionality
 
-use tauri::State;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 

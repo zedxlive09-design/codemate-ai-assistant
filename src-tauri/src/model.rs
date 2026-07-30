@@ -6,7 +6,6 @@
 //
 // PHASE 9+: Ollama Backend Implementation
 
-use std::sync::Mutex;
 use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use futures_util::StreamExt;
@@ -307,11 +306,13 @@ pub fn load_gguf_model(model_name: &str) -> Result<LoadModelResult, String> {
     match model_info {
         Some(ollama_info) => {
             let name = extract_model_name_from_ollama(&ollama_info.name);
-            let params = ollama_info.details
-                .and_then(|d| d.parameter_size)
+            let params = ollama_info.details.as_ref()
+                .and_then(|d| d.parameter_size.as_ref())
+                .cloned()
                 .unwrap_or_else(|| estimate_params_from_size(ollama_info.size));
-            let quant = ollama_info.details
-                .and_then(|d| d.quantization_level)
+            let quant = ollama_info.details.as_ref()
+                .and_then(|d| d.quantization_level.as_ref())
+                .cloned()
                 .unwrap_or_else(|| "Unknown".to_string());
             
             Ok(LoadModelResult {
@@ -626,7 +627,7 @@ pub async fn pull_model(model_name: &str, mut on_progress: impl FnMut(String) + 
 // ============================================================================
 
 /// Scan directory for GGUF model files (legacy support, now maps to Ollama)
-pub fn scan_directory_for_models(dir: &Path) -> Result<Vec<ModelConfig>, String> {
+pub fn scan_directory_for_models(_dir: &Path) -> Result<Vec<ModelConfig>, String> {
     let mut models = Vec::new();
     
     // Try to get models from Ollama instead of scanning filesystem
@@ -634,11 +635,13 @@ pub fn scan_directory_for_models(dir: &Path) -> Result<Vec<ModelConfig>, String>
         Ok(ollama_models) => {
             for om in ollama_models {
                 let name = extract_model_name_from_ollama(&om.name);
-                let params = om.details
-                    .and_then(|d| d.parameter_size)
+                let params = om.details.as_ref()
+                    .and_then(|d| d.parameter_size.as_ref())
+                    .cloned()
                     .unwrap_or_else(|| estimate_params_from_size(om.size));
-                let quant = om.details
-                    .and_then(|d| d.quantization_level)
+                let quant = om.details.as_ref()
+                    .and_then(|d| d.quantization_level.as_ref())
+                    .cloned()
                     .unwrap_or_else(|| "Q4".to_string());
                 
                 models.push(ModelConfig {
