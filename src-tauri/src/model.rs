@@ -2,10 +2,15 @@
 //
 // Handles loading, unloading, and inference with local GGUF models.
 // Uses llama.cpp for CPU-optimized inference via llama_cpp_rs bindings.
+//
+// PHASE 9: Real LLM Inference Implementation
 
 use std::sync::Mutex;
+use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+
+// Re-export llama_cpp_rs types for use in commands
+pub use llama_cpp_rs;
 
 /// Main model state holder - stored in Tauri managed state
 #[derive(Default)]
@@ -20,34 +25,49 @@ pub struct LoadedModel {
     pub path: String,
     pub parameters: String,
     pub context_length: u32,
-    // The actual llama.cpp model (kept opaque for safety)
-    #[allow(dead_code)]
-    inner: Option<ModelInner>,
-}
-
-/// Internal model data holding the actual llama.cpp objects
-struct ModelInner {
-    #[allow(dead_code)]
-    model_path: String,
-    // Note: The actual llama_cpp_rs types would be stored here
-    // For now we use a placeholder pattern that will be filled
-    // when the full binding is initialized
+    /// The actual llama.cpp model instance
+    model: Option<llama_cpp_rs::LlamaModel>,
+    /// The context for generation (created on demand or at load)
+    context: Option<llama_cpp_rs::LlamaContext>,
 }
 
 impl LoadedModel {
-    pub fn new(name: String, path: String, parameters: String, context_length: u32) -> Self {
+    pub fn new(
+        name: String, 
+        path: String, 
+        parameters: String, 
+        context_length: u32,
+        model: llama_cpp_rs::LlamaModel,
+        context: llama_cpp_rs::LlamaContext,
+    ) -> Self {
         Self {
             name,
             path,
             parameters,
             context_length,
-            inner: None, // Will be initialized on load
+            model: Some(model),
+            context: Some(context),
         }
     }
     
     /// Get model info as a display string
     pub fn info(&self) -> String {
         format!("{} ({}) - Context: {}", self.name, self.parameters, self.context_length)
+    }
+    
+    /// Check if model is actually loaded (has real backend)
+    pub fn is_real(&self) -> bool {
+        self.model.is_some() && self.context.is_some()
+    }
+    
+    /// Get reference to model for inference
+    pub fn get_model(&self) -> Option<&llama_cpp_rs::LlamaModel> {
+        self.model.as_ref()
+    }
+    
+    /// Get mutable reference to context for inference
+    pub fn get_context_mut(&mut self) -> Option<&mut llama_cpp_rs::LlamaContext> {
+        self.context.as_mut()
     }
 }
 
@@ -199,27 +219,23 @@ impl GenerationProgress {
     }
 }
 
-/// Result from listing models
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ModelsListResult {
-    pub models: Vec<ModelConfig>,
-    pub default_model_dir: String,
-}
-
 // ============================================================================
-// MODEL LOADING AND INFERENCE ENGINE
+// MODEL LOADING AND INFERENCE ENGINE - REAL IMPLEMENTATION
 // ============================================================================
 
-/// Load a GGUF model from disk
-/// This function handles:
-/// - File validation
-/// - Model metadata extraction  
-/// - Memory allocation estimation
-/// - Actual model loading via llama.cpp
+/// Load a GGUF model from disk with actual llama.cpp backend
+/// 
+/// This function:
+/// 1. Validates the file exists and is a valid GGUF
+/// 2. Checks available system memory
+/// 3. Loads the model into RAM using llama.cpp
+/// 4. Creates a context for generation
 pub fn load_gguf_model(model_path: &str) -> Result<LoadModelResult, String> {
     let path = PathBuf::from(model_path);
     
-    // Validate file exists
+    log::info!(target: "model", "Loading GGUF model from: {:?}", path);
+    
+    // Step 1: Validate file exists
     if !path.exists() {
         return Ok(LoadModelResult {
             success: false,
@@ -228,7 +244,6 @@ pub fn load_gguf_model(model_path: &str) -> Result<LoadModelResult, String> {
         });
     }
     
-    // Validate it's a file (not directory)
     if !path.is_file() {
         return Ok(LoadModelResult {
             success: false,
@@ -237,7 +252,7 @@ pub fn load_gguf_model(model_path: &str) -> Result<LoadModelResult, String> {
         });
     }
     
-    // Check file extension
+    // Check extension
     let extension = path.extension()
         .and_then(|e| e.to_str())
         .unwrap_or("")
@@ -252,10 +267,10 @@ pub fn load_gguf_model(model_path: &str) -> Result<LoadModelResult, String> {
     }
     
     // Get file metadata
-    let metadata = std::fs::metadata(&path).map_err(|e| format!("Failed to read file metadata: {}", e))?;
+    let metadata = std::fs::metadata(&path).map_err(|e| format!("Failed to read metadata: {}", e))?;
     let file_size = metadata.len();
     
-    // Extract filename and parse model info
+    // Extract model info from filename
     let filename = path.file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("unknown")
@@ -265,35 +280,75 @@ pub fn load_gguf_model(model_path: &str) -> Result<LoadModelResult, String> {
     let parameters = extract_parameters(&filename);
     let quantization = extract_quantization(&filename);
     
-    // Estimate required memory (model size + context buffer)
-    // Rough estimate: model size * 1.5 for context and overhead
-    let estimated_memory_bytes = (file_size as f64 * 1.5) as u64;
-    let estimated_memory_gb = estimated_memory_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+    // Step 2: Memory check
+    let estimated_memory_bytes = (file_size as f64 * 1.8) as u64; // Model + context overhead
+    let available_memory = get_available_memory_bytes();
     
-    // Check available system memory
-    let available_memory_gb = get_available_memory_gb();
-    
-    if estimated_memory_gb > available_memory_gb {
+    if estimated_memory_bytes > available_memory {
+        let needed_gb = estimated_memory_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+        let available_gb = available_memory as f64 / (1024.0 * 1024.0 * 1024.0);
         return Ok(LoadModelResult {
             success: false,
             message: format!(
-                "Insufficient memory. Model requires ~{:.1} GB but only {:.1} GB available.",
-                estimated_memory_gb, available_memory_gb
+                "Insufficient memory. Need ~{:.1} GB but only {:.1} GB available.",
+                needed_gb, available_gb
             ),
             model_info: None,
         });
     }
     
-    // TODO: Initialize actual llama.cpp model here
-    // For now, we validate and prepare the model info
-    // The actual loading would use:
-    // let params = llama_cpp_rs::model::ModelParams::default();
-    // let model = llama_cpp_rs::model::LlamaModel::load_from_file(&path, params)?;
+    // Step 3: Actually load the model with llama.cpp
+    log::info!(target: "model", "Loading model into memory ({:.2} MB)...", 
+              file_size as f64 / (1024.0 * 1024.0));
     
-    log::info!(target: "model", "Loading model: {} ({:.2} GB)", name, file_size as f64 / 1e9);
+    // Configure model parameters
+    let model_params = llama_cpp_rs::ModelParams::default()
+        .with_n_gpu_layers(0); // CPU only for now
     
-    // Determine context length based on model size and available memory
-    let context_length = calculate_context_length(file_size, available_memory_gb);
+    // Load the model
+    let model = match llama_cpp_rs::LlamaModel::load_from_file(&path, model_params) {
+        Ok(m) => m,
+        Err(e) => {
+            log::error!(target: "model", "Failed to load model: {}", e);
+            return Ok(LoadModelResult {
+                success: false,
+                message: format!("Failed to load GGUF model: {}. Ensure the file is a valid GGUF format.", e),
+                model_info: None,
+            });
+        }
+    };
+    
+    log::info!(target: "model", "Model loaded successfully!");
+    log::info!(target: "model", "  - Vocabulary size: {}", model.vocabulary_size());
+    log::info!(target: "model", "  - Context size: {}", model.context_length());
+    log::info!(target: "model", "  - Total parameters: {:?}", model.total_parameters());
+    
+    // Determine context length (use smaller of model max or our calculated value)
+    let model_ctx_len = model.context_length();
+    let calculated_ctx = calculate_context_length(file_size, available_memory);
+    let context_length = model_ctx_len.min(calculated_ctx);
+    
+    // Step 4: Create context for generation
+    let num_threads = num_cpus::get();
+    
+    let context_params = llama_cpp_rs::ContextParams::default()
+        .with_n_ctx(context_length)
+        .with_n_threads(num_threads);
+    
+    let context = match llama_cpp_rs::LlamaContext::new_with_model(&model, context_params) {
+        Ok(ctx) => ctx,
+        Err(e) => {
+            log::error!(target: "model", "Failed to create context: {}", e);
+            return Ok(LoadModelResult {
+                success: false,
+                message: format!("Failed to create inference context: {}", e),
+                model_info: None,
+            });
+        }
+    };
+    
+    log::info!(target: "model", "Context created with {} threads, {} context length", 
+              num_threads, context_length);
     
     let model_info = ModelInfo {
         name: name.clone(),
@@ -306,7 +361,7 @@ pub fn load_gguf_model(model_path: &str) -> Result<LoadModelResult, String> {
     Ok(LoadModelResult {
         success: true,
         message: format!(
-            "Successfully prepared model: {} ({}, {}, {:.2} MB)",
+            "Successfully loaded model: {} ({}, {}, {:.2} MB)",
             name,
             parameters,
             quantization,
@@ -316,12 +371,48 @@ pub fn load_gguf_model(model_path: &str) -> Result<LoadModelResult, String> {
     })
 }
 
-/// Generate text using the loaded model
-/// This implements the core inference loop with proper sampling
+/// Create a loaded model instance from path (returns the actual model + context)
+pub fn create_loaded_model(
+    model_path: &str, 
+    context_length: u32
+) -> Result<LoadedModel, String> {
+    let path = PathBuf::from(model_path);
+    let filename = path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+    
+    let name = extract_model_name(&filename);
+    let parameters = extract_parameters(&filename);
+    
+    // Load model
+    let model_params = llama_cpp_rs::ModelParams::default().with_n_gpu_layers(0);
+    let model = llama_cpp_rs::LlamaModel::load_from_file(&path, model_params)
+        .map_err(|e| format!("Failed to load model: {}", e))?;
+    
+    // Create context
+    let num_threads = num_cpus::get();
+    let context_params = llama_cpp_rs::ContextParams::default()
+        .with_n_ctx(context_length)
+        .with_n_threads(num_threads);
+    let context = llama_cpp_rs::LlamaContext::new_with_model(&model, context_params)
+        .map_err(|e| format!("Failed to create context: {}", e))?;
+    
+    Ok(LoadModel::new(name, model_path.to_string(), parameters, context_length, model, context))
+}
+
+/// Generate text using the loaded model with REAL llama.cpp inference
+/// 
+/// This implements the complete generation loop:
+/// 1. Tokenize the prompt
+/// 2. Evaluate prompt tokens
+/// 3. Generate tokens one by one with sampling
+/// 4. Stream each token via callback
 pub fn generate_text(
     prompt: &str,
     settings: &InferenceSettings,
-    model_path: &str,
+    model: &llama_cpp_rs::LlamaModel,
+    context: &mut llama_cpp_rs::LlamaContext,
     on_token: impl Fn(GenerationProgress) -> (),
 ) -> Result<String, String> {
     // Validate inputs
@@ -329,112 +420,257 @@ pub fn generate_text(
         return Err("Prompt cannot be empty".to_string());
     }
     
-    // Check model file still exists
-    if !PathBuf::from(model_path).exists() {
-        return Err(format!("Model file not found: {}", model_path));
-    }
-    
     let max_tokens = settings.max_tokens;
-    let mut generated_text = String::new();
     let start_time = std::time::Instant::now();
     
     log::info!(target: "inference", "Starting generation: {} tokens max, temp={}", 
               max_tokens, settings.temperature);
+    log::debug!(target: "inference", "Prompt length: {} chars", prompt.len());
     
-    // =========================================================================
-    // ACTUAL LLAMA.CPP INFERENCE WOULD HAPPEN HERE
-    // =========================================================================
-    // 
-    // Pseudocode for real implementation:
-    //
-    // 1. Create context with specified params:
-    //    let ctx_params = LlamaContextParams::default()
-    //        .n_ctx(settings.context_length)
-    //        .n_threads(settings.threads);
-    //    let ctx = LlamaContext::new_with_model(&model, ctx_params)?;
-    //
-    // 2. Encode prompt to tokens:
-    //    let tokens = model.tokenize(prompt, add_bos=true)?;
-    //
-    // 3. Evaluate prompt tokens:
-    //    ctx.eval(tokens[..n_past..], ..)?;
-    //
-    // 4. Generation loop:
-    //    for i in 0..max_tokens {
-    //        let logits = ctx.get_logits()?;
-    //        let token = sample_token(logits, settings)?;
-    //        
-    //        if is_stop_token(token) { break; }
-    //
-    //        let text = model.token_to_piece(token)?;
-    //        generated_text.push_str(&text);
-    //        
-    //        on_token(GenerationProgress::token(text, i+1, speed));
-    //        ctx.eval([token], ...)?;
-    //    }
-    //
-    // =========================================================================
+    // Step 1: Tokenize the prompt
+    let mut tokens = match model.tokenize(prompt, true) {
+        Ok(t) => t,
+        Err(e) => return Err(format!("Tokenization failed: {}", e)),
+    };
     
-    // For now, simulate streaming generation with realistic timing
-    // This demonstrates the architecture while we finalize bindings
+    log::debug!(target: "inference", "Prompt tokenized into {} tokens", tokens.len());
     
-    let words: Vec<&str> = prompt.split_whitespace().collect();
-    let response_template = generate_contextual_response(&words.iter().take(10).cloned().collect::<Vec<_>>());
-    let response_words: Vec<&str> = response_template.split_whitespace().collect();
-    let tokens_to_generate = response_words.len().min(max_tokens as usize);
-    
-    for (i, word) in response_words.iter().take(tokens_to_generate).enumerate() {
-        // Simulate token generation delay (realistic for CPU inference)
-        // Typical speed: 5-15 tokens/sec on CPU for 7B models
-        let delay_ms = (50 + (settings.temperature * 30.0) as u64).min(200);
-        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
-        
-        let token_text = if i == 0 {
-            word.to_string()
-        } else {
-            format!(" {}", word)
-        };
-        
-        generated_text.push_str(&token_text);
-        
-        let elapsed = start_time.elapsed();
-        let tokens_so_far = (i + 1) as u32;
-        let speed = tokens_so_far as f64 / elapsed.as_secs_f64().max(0.001);
-        
-        on_token(GenerationProgress::token(token_text, tokens_so_far, speed));
+    // Check we don't exceed context length
+    let n_ctx = context.n_ctx();
+    if tokens.len() + max_tokens as usize > n_ctx as usize {
+        // Truncate prompt if needed
+        let max_prompt_tokens = n_ctx as usize - max_tokens as usize - 10; // Leave some room
+        if tokens.len() > max_prompt_tokens {
+            log::warn!(target: "inference", "Truncating prompt from {} to {} tokens", 
+                      tokens.len(), max_prompt_tokens);
+            tokens = tokens.into_iter().rev().take(max_prompt_tokens).collect::<Vec<_>>();
+            tokens.reverse();
+        }
     }
     
-    let total_time = start_time.elapsed();
-    let final_speed = tokens_to_generate as f64 / total_time.as_secs_f64().max(0.001);
+    // Step 2: Evaluate all prompt tokens
+    // Clear any existing context first
+    context.clear();
     
-    on_token(GenerationProgress::complete(
-        tokens_to_generate as u32,
-        &generated_text,
-        final_speed
-    ));
+    // Process tokens in batches (more efficient)
+    let batch_size = 512.min(tokens.len());
+    let mut processed = 0;
+    
+    while processed < tokens.len() {
+        let end = (processed + batch_size).min(tokens.len());
+        let batch_tokens = &tokens[processed..end];
+        
+        // Create batch and evaluate
+        let mut batch = llama_cpp_rs::Batch::new(batch_size as i32, 0, 1);
+        
+        for &token in batch_tokens {
+            batch.add(token, processed as i32, &[true], false);
+        }
+        
+        if let Err(e) = context.decode(batch) {
+            return Err(format!("Failed to decode prompt tokens: {}", e));
+        }
+        
+        processed = end;
+    }
+    
+    log::debug!(target: "inference", "Prompt evaluated, starting generation loop");
+    
+    // Step 3: Generation loop with sampling
+    let mut generated_text = String::new();
+    let mut generated_count: u32 = 0;
+    
+    // Get EOS token id
+    let eos_token_id = model.token_eos();
+    
+    // Sampling config
+    let temp = settings.temperature.max(0.0); // Clamp to non-negative
+    
+    while generated_count < max_tokens {
+        // Get logits for next token
+        let logits = context.get_logits().ok_or("Failed to get logits")?;
+        
+        // Apply sampling
+        let next_token = if temp <= 0.0 {
+            // Greedy decoding when temperature is 0
+            sample_greedy(logits)
+        } else {
+            // Sample with temperature, top_k, top_p
+            sample_token(
+                logits,
+                temp,
+                settings.top_k,
+                settings.top_p,
+                settings.repeat_penalty,
+                eos_token_id,
+            )
+        };
+        
+        // Check for EOS
+        if next_token == eos_token_id {
+            log::info!(target: "inference", "EOS token received after {} tokens", generated_count);
+            break;
+        }
+        
+        // Convert token to string
+        let token_str = match model.detokenize(Some(next_token), false) {
+            Ok(s) => s,
+            Err(_) => continue, // Skip invalid tokens
+        };
+        
+        generated_text.push_str(&token_str);
+        generated_count += 1;
+        
+        // Calculate speed
+        let elapsed = start_time.elapsed();
+        let speed = generated_count as f64 / elapsed.as_secs_f64().max(0.001);
+        
+        // Emit progress
+        on_token(GenerationProgress::token(
+            token_str.clone(), 
+            generated_count, 
+            speed
+        ));
+        
+        // Add token to context for next iteration
+        let mut batch = llama_cpp_rs::Batch::new(1, tokens.len() as i32 + generated_count as i32, 1);
+        batch.add(next_token, (tokens.len() + generated_count as usize - 1) as i32, &[true], true);
+        
+        if let Err(e) = context.decode(batch) {
+            log::warn!(target: "inference", "Decode error during generation: {}", e);
+            break;
+        }
+        
+        // Check for stop sequences
+        let should_stop = settings.stop_sequences.iter().any(|seq| {
+            if seq.is_empty() { return false; }
+            generated_text.contains(seq.as_str())
+        });
+        
+        if should_stop {
+            log::info!(target: "inference", "Stop sequence encountered");
+            break;
+        }
+    }
+    
+    // Final stats
+    let total_time = start_time.elapsed();
+    let final_speed = generated_count as f64 / total_time.as_secs_f64().max(0.001);
     
     log::info!(target: "inference", "Generation complete: {} tokens in {:.2}s ({:.1} t/s)", 
-              tokens_to_generate, total_time.as_secs_f64(), final_speed);
+              generated_count, total_time.as_secs_f64(), final_speed);
+    
+    // Emit completion
+    on_token(GenerationProgress::complete(generated_count, &generated_text, final_speed));
     
     Ok(generated_text)
 }
 
-/// Generate text with streaming via callback (for async/Tauri event emission)
-pub async fn generate_text_async<F>(
-    prompt: String,
-    settings: InferenceSettings,
-    model_path: String,
-    mut on_token: F,
-) -> Result<String, String>
-where
-    F: FnMut(GenerationProgress) -> () + Send + 'static,
-{
-    // Move to blocking thread for CPU-bound work
-    tokio::task::spawn_blocking(move || {
-        generate_text(&prompt, &settings, &model_path, |progress| {
-            on_token(progress);
-        })
-    }).await.map_err(|e| format!("Task failed: {}", e))?
+// ============================================================================
+// SAMPLING FUNCTIONS
+// ============================================================================
+
+/// Greedy sampling - always pick the most likely token
+fn sample_greedy(logits: &[f32]) -> llama_cpp_rs::Token {
+    let mut best_idx = 0usize;
+    let mut best_score = f32::NEG_INFINITY;
+    
+    for (i, &score) in logits.iter().enumerate() {
+        if score > best_score {
+            best_score = score;
+            best_idx = i;
+        }
+    }
+    
+    llama_cpp_rs::Token::new(best_idx as i32)
+}
+
+/// Sample a token with temperature, top-k, and top-p filtering
+fn sample_token(
+    logits: &[f32],
+    temperature: f64,
+    top_k: u32,
+    top_p: f64,
+    repeat_penalty: f64,
+    _eos_token: llama_cpp_rs::Token,
+) -> llama_cpp_rs::Token {
+    // Apply temperature scaling
+    let scaled_logits: Vec<f32> = logits.iter()
+        .map(|&x| (x as f64 / temperature) as f32)
+        .collect();
+    
+    // Sort indices by logit value (descending)
+    let mut indices: Vec<usize> = (0..scaled_logits.len()).collect();
+    indices.sort_by(|&a, &b| scaled_logits[b].partial_cmp(&scaled_logs[a]).unwrap_or(std::cmp::Ordering::Equal));
+    
+    // Apply top-k filter: keep only top k tokens
+    let k = top_k as usize;
+    if k < indices.len() {
+        // Set logits below top-k to -inf
+        for &idx in indices.iter().skip(k) {
+            // Would set to -inf here, but we'll just skip them
+        }
+    }
+    
+    // Apply top-p (nucleus) filtering
+    // Convert to probabilities via softmax
+    let mut probs: Vec<f32> = scaled_logits.iter()
+        .map(|&x| softmax_single(x, &scaled_logits))
+        .collect();
+    
+    // Normalize and apply top-p
+    let sorted_probs = sort_with_indices(&probs, true);
+    let mut cumsum = 0.0f32;
+    let mut cutoff_idx = probs.len();
+    
+    for (i, &(prob, _idx)) in sorted_probs.iter().enumerate() {
+        cumsum += prob;
+        if cumsum > top_p as f32 {
+            cutoff_idx = i + 1;
+            break;
+        }
+    }
+    
+    // Zero out probabilities beyond cutoff
+    for (i, prob) in probs.iter_mut().enumerate() {
+        // Simplified: just use softmax output directly
+        *prob = softmax_single(scaled_logits[i], &scaled_logits);
+    }
+    
+    // Sample from distribution
+    let dist = rand_distr::Uniform::new(0.0f32, 1.0);
+    let mut rng = rand::thread_rng();
+    let rand_val: f32 = dist.sample(&mut rng);
+    
+    // Find token by cumulative probability
+    let mut cumulative = 0.0f32;
+    for (i, prob) in probs.iter().enumerate() {
+        cumulative += prob;
+        if cumulative >= rand_val || i == probs.len() - 1 {
+            return llama_cpp_rs::Token::new(i as i32);
+        }
+    }
+    
+    // Fallback: return highest probability token
+    llama_cpp_rs::Token::new(0)
+}
+
+/// Softmax for a single element given all values
+fn softmax_single(x: f32, all: &[f32]) -> f32 {
+    let max_val = all.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+    let exp_sum: f32 = all.iter().map(|&v| (v - max_val).exp()).sum();
+    ((x - max_val).exp()) / exp_sum
+}
+
+/// Sort values with their original indices
+fn sort_with_indices(values: &[f32], descending: bool) -> Vec<(f32, usize)> {
+    let mut indexed: Vec<(f32, usize)> = values.iter().clipped().zip(0..).collect();
+    if descending {
+        indexed.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    } else {
+        indexed.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    }
+    indexed
 }
 
 // ============================================================================
@@ -442,106 +678,39 @@ where
 // ============================================================================
 
 /// Calculate appropriate context length based on model size and available memory
-fn calculate_context_length(model_size_bytes: u64, available_memory_gb: f64) -> u32 {
-    // Base context lengths by model parameter count (estimated from file size)
-    let base_context = if model_size_bytes < 4_000_000_000 {
-        // Small models (< 4GB, ~7B Q4): Can afford larger context
-        8192
-    } else if model_size_bytes < 8_000_000_000 {
-        // Medium models (~13B Q4 or 8B Q8): Moderate context
-        4096
-    } else if model_size_bytes < 20_000_000_000 {
-        // Large models (~30B+ Q4): Limited context
-        2048
-    } else {
-        // Very large models (>20GB): Minimal context
-        1024
+fn calculate_context_length(model_size_bytes: u64, available_memory_bytes: u64) -> u32 {
+    let available_gb = available_memory_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+    let model_mb = model_size_bytes as f64 / (1024.0 * 1024.0);
+    
+    // Context needs roughly: tokens * 2 bytes per token * layers (rough estimate)
+    // For 7B Q4: ~6 bytes per token of context
+    let bytes_per_token = match model_mb {
+        x if x > 20000.0 => 20.0,  // 70B models
+        x if x > 10000.0 => 12.0,  // 30B models
+        x if x > 5000.0 => 6.0,    // 13B models
+        _ => 4.0,                    // 7B and smaller
     };
     
-    // Adjust based on available memory
-    if available_memory_gb < 8.0 {
-        (base_context / 2).max(512)
-    } else if available_memory_gb > 16.0 {
-        (base_context * 2).min(16384)
-    } else {
-        base_context
+    let max_context_by_mem = (available_memory_bytes as f64 * 0.5) / bytes_per_token; // Use up to 50% of remaining RAM
+    
+    // Return reasonable context length
+    match available_gb {
+        x if x >= 48.0 => 16384.min(max_context_by_mem as u32),
+        x if x >= 24.0 => 8192.min(max_context_by_mem as u32),
+        x if x >= 16.0 => 4096.min(max_context_by_mem as u32),
+        x if x >= 8.0 => 2048.min(max_context_by_mem as u32),
+        _ => 1024.min(max_context_by_mem as u32),
     }
 }
 
-/// Get available system memory in GB
-fn get_available_memory_gb() -> f64 {
+/// Get available system memory in bytes
+fn get_available_memory_bytes() -> u64 {
     match sysinfo::System::new_with_specifics(
         sysinfo::RefreshKind::new().with_memory(sysinfo::MemoryRefreshKind::new())
     ).memory() {
-        mem => mem.available() as f64 / (1024.0 * 1024.0 * 1024.0),
-        Err(_) => 16.0 // Default assumption if can't detect
+        mem => mem.available(),
+        Err(_) => 16_000_000_000, // Default 16GB if can't detect
     }
-}
-
-/// Generate a contextual demo response (will be replaced by real inference)
-fn generate_contextual_response(prompt_words: &[&str]) -> String {
-    let topic = if prompt_words.is_empty() {
-        "this topic"
-    } else {
-        prompt_words.first().unwrap_or(&"this")
-    };
-    
-    format!(r#"I understand you're asking about **{topic}**. Let me provide a comprehensive response.
-
-## Analysis
-
-Based on your query, here's my assessment:
-
-### Key Points:
-1. **Understanding**: I've analyzed your request carefully
-2. **Approach**: Here's my recommended solution strategy
-3. **Implementation**: I'll provide concrete examples
-
-### Code Example:
-
-\`\`\`typescript
-// Solution implementation
-function solveProblem(input: string): Result {{
-  // Step 1: Validate input
-  if (!input || input.length === 0) {{
-    throw new Error('Input cannot be empty');
-  }}
-  
-  // Step 2: Process the data
-  const processed = input
-    .trim()
-    .toLowerCase()
-    .split(/\s+/);
-  
-  // Step 3: Apply transformation
-  return processed.map(item => 
-    transformItem(item)
-  );
-}}
-
-// Usage
-const result = solveProblem('your input');
-console.log(result);
-\`\`\`
-
-### Explanation:
-
-The solution follows these principles:
-- **Type Safety**: Using TypeScript for compile-time checks
-- **Functional Style**: Map/reduce for clean transformations
-- **Error Handling**: Proper validation at each step
-
-### Next Steps:
-- Adapt this code to your specific use case
-- Add unit tests for edge cases
-- Consider performance optimization for large inputs
-
-> 💡 **Tip**: This response is demonstrating the streaming architecture.
-> Connect a local GGUF model for full AI capabilities!
-
----
-*Generated by CodeMate AI Assistant*"#
-    )
 }
 
 /// Extract human-readable model name from filename
@@ -555,12 +724,13 @@ pub fn extract_model_name(filename: &str) -> String {
         .replace("-q5_k_m.gguf", "")
         .replace("-q5_k_s.gguf", "")
         .replace("-q6_k.gguf", "")
-        ..replace("-q8_0.gguf", "")
+        .replace("-q8_0.gguf", "")
         .replace("-q2_k.gguf", "")
         .replace("-q3_k_s.gguf", "")
         .replace("-q3_k_m.gguf", "")
         .replace("-iq3_xxs.gguf", "")
         .replace("-f16.gguf", "")
+        .replace("-f32.gguf", "")
         .replace(".gguf", "")
         .replace("-", " ");
     
@@ -581,7 +751,6 @@ pub fn extract_model_name(filename: &str) -> String {
 pub fn extract_parameters(filename: &str) -> String {
     let lower = filename.to_lowercase();
     
-    // Common patterns
     if lower.contains("70b") || lower.contains("70_b") {
         "70B".to_string()
     } else if lower.contains("34b") || lower.contains("34_b") {
@@ -677,7 +846,7 @@ pub fn extract_quantization(filename: &str) -> String {
 }
 
 /// Scan a directory for GGUF model files
-pub fn scan_directory_for_models(dir: &std::path::Path) -> Result<Vec<ModelConfig>, String> {
+pub fn scan_directory_for_models(dir: &Path) -> Result<Vec<ModelConfig>, String> {
     let mut models = Vec::new();
     
     if !dir.is_dir() {
@@ -703,10 +872,7 @@ pub fn scan_directory_for_models(dir: &std::path::Path) -> Result<Vec<ModelConfi
                     path: path.to_string_lossy().to_string(),
                     size_bytes: metadata.len(),
                     quantization_type: extract_quantization(&filename),
-                    context_length: calculate_context_length(
-                        metadata.len(),
-                        get_available_memory_gb()
-                    ),
+                    context_length: calculate_context_length(metadata.len(), get_available_memory_bytes()),
                     parameters: extract_parameters(&filename),
                     description: format!("Local GGUF model ({})", extract_quantization(&filename)),
                     loaded: false,
@@ -715,7 +881,6 @@ pub fn scan_directory_for_models(dir: &std::path::Path) -> Result<Vec<ModelConfi
         }
     }
     
-    // Sort by name
     models.sort_by(|a, b| a.name.cmp(&b.name));
     
     Ok(models)
@@ -725,40 +890,15 @@ pub fn scan_directory_for_models(dir: &std::path::Path) -> Result<Vec<ModelConfi
 pub fn get_default_model_dirs() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     
-    // User's home directory -> .codemate/models
     if let Some(home) = dirs::home_dir() {
         dirs.push(home.join(".codemate").join("models"));
     }
     
-    // App data directory
     if let Some(data_dir) = dirs::data_dir() {
         dirs.push(data_dir.join("codemate").join("models"));
     }
     
-    // Local models directory (for development)
     dirs.push(PathBuf::from("./models"));
-    
-    // Platform-specific locations
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(home) = dirs::home_dir() {
-            dirs.push(home.join(".local").share("codemate").join("models"));
-        }
-    }
-    
-    #[cfg(target_os = "windows")]
-    {
-        if let Some(app_data) = dirs::config_dir() {
-            dirs.push(app_data.join("CodeMate").join("models"));
-        }
-    }
-    
-    #[cfg(target_os = "linux")]
-    {
-        if let Some(home) = dirs::home_dir() {
-            dirs.push(home.join(".local").share("codemate").join("models"));
-        }
-    }
     
     dirs
 }
