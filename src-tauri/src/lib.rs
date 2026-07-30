@@ -1,7 +1,7 @@
 // CodeMate AI Assistant - Tauri Backend
 //
-// This module handles all backend operations for the offline AI assistant:
-// - Model loading and inference (via llama.cpp)
+// This module handles all backend operations for the AI assistant:
+// - Model loading and inference (via Ollama)
 // - File system operations
 // - Project analysis
 // - Terminal command execution
@@ -31,6 +31,8 @@ pub fn run() {
             commands::model::get_model_directories,
             commands::model::ensure_model_directory,
             commands::model::validate_model_file,
+            commands::model::check_ollama_available,
+            commands::model::pull_ollama_model,
             commands::model::get_inference_system_info,
             commands::model::get_gpu_info,
             // === PROJECT COMMANDS ===
