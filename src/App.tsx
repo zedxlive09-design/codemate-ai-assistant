@@ -84,7 +84,9 @@ export default function App() {
   // State for modal panels
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useShouldShowOnboarding();
+  const shouldShowOnboarding = useShouldShowOnboarding(); // Returns boolean from hook
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const showOnboarding = shouldShowOnboarding && !onboardingDismissed;
 
   // Voice input transcript handler
   const handleVoiceTranscript = useCallback((text: string) => {
@@ -519,7 +521,7 @@ export default function App() {
         {showOnboarding && (
           <OnboardingWizard
             isOpen={showOnboarding}
-            onClose={() => setShowOnboarding(false)}
+            onClose={() => setOnboardingDismissed(true)}
           />
         )}
       </div>
