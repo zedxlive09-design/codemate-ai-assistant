@@ -59,7 +59,7 @@ pub async fn execute_command(
     command: String,
     cwd: Option<String>,
 ) -> Result<CommandResult, String> {
-    let mut cmd = if cfg!(target_os = "windows" {
+    let mut cmd = if cfg!(target_os = "windows") {
         std::process::Command::new("cmd")
     } else {
         std::process::Command::new("sh")
