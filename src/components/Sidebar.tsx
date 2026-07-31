@@ -1,8 +1,33 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { fileCommands } from '../lib/tauri';
-import { Brain, Search, Tag, Clock, X, Filter, Pin } from 'lucide-react';
+import { Brain, Search, Tag, Clock, X, Filter, Pin, Archive, ArchiveRestore, Package, ChevronDown, ChevronRight, Edit2, Copy } from 'lucide-react';
 import { AVAILABLE_TAGS } from './TagPicker';
+import type { Conversation } from '../types';
+
+// XSS-safe search-term highlighting. Escapes HTML first, then wraps matches
+// in a <mark> themed via --cm-primary. Extracted to module scope so both the
+// active ConversationItem and the ArchivedItem share the same logic.
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function highlightText(text: string, query: string): string {
+  const escaped = escapeHtml(text);
+  if (!query) return escaped;
+  const safeQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(${safeQuery})`, 'gi');
+  // Apply regex to the ESCAPED string so user content can never inject HTML.
+  return escaped.replace(
+    re,
+    '<mark class="rounded px-0.5" style="background: color-mix(in srgb, var(--cm-primary) 30%, transparent); color: var(--cm-primary);">$1</mark>'
+  );
+}
 
 // Format date for display
 function formatDate(date: Date | string | number): string {
@@ -40,11 +65,20 @@ export default function Sidebar() {
     pinnedConversationIds,
     togglePinConversation,
     conversationTags,
+    archivedConversationIds,
+    archiveConversation,
+    unarchiveConversation,
+    renameConversation,
+    duplicateConversation,
   } = useStore();
 
   const [searchQuery, setSearchQuery] = useState('');
   // Transient tag filter state (view-only — not persisted to the store).
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
+  // Collapsible Archived section at the bottom of the conversation list.
+  // Auto-expands when a search query yields archived matches so users can
+  // see + unarchive them without an extra click.
+  const [archivedExpanded, setArchivedExpanded] = useState(false);
 
   const handleNewChat = () => {
     createConversation();
@@ -115,7 +149,10 @@ export default function Sidebar() {
 
   // Filter conversations based on search query AND active tags (OR semantics
   // across active tags — a conversation matches if it has ANY active tag).
+  // Archived conversations are EXCLUDED from the main list — they appear in
+  // their own "Archived" section at the bottom (computed separately below).
   const filteredConversations = sortedConversations.filter(conv => {
+    if (archivedConversationIds.includes(conv.id)) return false;
     if (hasActiveTags) {
       const convTags = conversationTags[conv.id] || [];
       if (!convTags.some(t => activeTags.has(t))) return false;
@@ -127,6 +164,27 @@ export default function Sidebar() {
       conv.messages.some(m => m.content.toLowerCase().includes(q))
     );
   });
+
+  // Archived conversations, filtered by the same search query so users can
+  // find an archived thread by content and unarchive it. When no search is
+  // active, every archived conversation is listed (subject to the section's
+  // expand/collapse toggle).
+  const archivedConversations = sortedConversations.filter(conv => {
+    if (!archivedConversationIds.includes(conv.id)) return false;
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      conv.title.toLowerCase().includes(q) ||
+      conv.messages.some(m => m.content.toLowerCase().includes(q))
+    );
+  });
+
+  const hasSearch = searchQuery.trim().length > 0;
+  // Auto-expand the archive list when a search yields archived matches so
+  // users can see + unarchive them without an extra click. Otherwise the
+  // user's manual expand/collapse choice is respected.
+  const showArchivedList =
+    archivedExpanded || (hasSearch && archivedConversations.length > 0);
 
   // Separate pinned and unpinned for display
   const pinnedConversations = filteredConversations.filter(c => pinnedConversationIds.includes(c.id));
@@ -201,7 +259,7 @@ export default function Sidebar() {
         </h3>
         {conversations.length > 0 && (
           <span className="text-[10px] bg-dark-800 text-dark-400 px-2 py-0.5 rounded-full">
-            {filteredConversations.length}/{conversations.length}
+            {filteredConversations.length}/{conversations.length - archivedConversationIds.length}
           </span>
         )}
       </div>
@@ -297,10 +355,10 @@ export default function Sidebar() {
                 </svg>
               </div>
             </div>
-            
+
             <p className="text-sm font-medium text-dark-400 mb-1">No conversations yet</p>
             <p className="text-xs text-dark-600 mb-4">Start a new chat to begin</p>
-            
+
             <button
               onClick={handleNewChat}
               className="text-xs cm-accent hover:opacity-80 font-medium transition-colors inline-flex items-center gap-1"
@@ -308,34 +366,78 @@ export default function Sidebar() {
               Create your first chat →
             </button>
           </div>
-        ) : filteredConversations.length === 0 ? (
-          /* No search results state */
-          <div className="text-center py-10 px-4">
-            <div className="w-14 h-14 mx-auto mb-3 relative">
-              <div className="relative w-14 h-14 rounded-full bg-dark-800/80 border border-dark-700 flex items-center justify-center">
-                <Search size={20} className="text-dark-500" />
-              </div>
-            </div>
-            <p className="text-sm font-medium text-dark-400 mb-1">No results found</p>
-            <p className="text-xs text-dark-600 mb-3">Try a different search term</p>
-            <button
-              onClick={() => setSearchQuery('')}
-              className="text-xs cm-accent hover:opacity-80 font-medium transition-colors"
-            >
-              Clear search
-            </button>
-          </div>
         ) : (
-          /* Conversation list - filtered with pinned section */
-          <div className="space-y-1">
-            {/* Pinned Conversations Section */}
-            {pinnedConversations.length > 0 && (
-              <>
-                <div className="flex items-center gap-2 px-3 py-2 text-[10px] font-bold text-dark-500 uppercase tracking-wider sticky top-0 bg-dark-900/95 backdrop-blur-sm z-10">
-                  <Pin size={10} className="cm-accent" />
-                  Pinned ({pinnedConversations.length})
+          <>
+            {/* No-results notice — only when a search yields zero matches in
+                BOTH the active list and the archive. Archived matches are
+                rendered in the Archived section below, so we don't show this
+                notice when there are archived hits. */}
+            {filteredConversations.length === 0 && archivedConversations.length === 0 && (
+              <div className="text-center py-10 px-4">
+                <div className="w-14 h-14 mx-auto mb-3 relative">
+                  <div className="relative w-14 h-14 rounded-full bg-dark-800/80 border border-dark-700 flex items-center justify-center">
+                    <Search size={20} className="text-dark-500" />
+                  </div>
                 </div>
-                {pinnedConversations.map((conversation, index) => (
+                <p className="text-sm font-medium text-dark-400 mb-1">No results found</p>
+                <p className="text-xs text-dark-600 mb-3">Try a different search term</p>
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="text-xs cm-accent hover:opacity-80 font-medium transition-colors"
+                >
+                  Clear search
+                </button>
+              </div>
+            )}
+
+            {/* Hint when no active conversations remain but the archive has
+                some — guides the user toward the Archived section below. */}
+            {filteredConversations.length === 0 && !hasSearch && archivedConversationIds.length > 0 && (
+              <div className="text-center py-6 px-4">
+                <Archive size={20} className="mx-auto mb-2 text-dark-500" />
+                <p className="text-sm font-medium text-dark-400 mb-1">All conversations archived</p>
+                <p className="text-xs text-dark-600">Restore one from the Archived section below</p>
+              </div>
+            )}
+
+            {/* Conversation list - filtered with pinned section */}
+            {filteredConversations.length > 0 && (
+              <div className="space-y-1">
+                {/* Pinned Conversations Section */}
+                {pinnedConversations.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-2 px-3 py-2 text-[10px] font-bold text-dark-500 uppercase tracking-wider sticky top-0 bg-dark-900/95 backdrop-blur-sm z-10">
+                      <Pin size={10} className="cm-accent" />
+                      Pinned ({pinnedConversations.length})
+                    </div>
+                    {pinnedConversations.map((conversation, index) => (
+                      <ConversationItem
+                        key={conversation.id}
+                        conversation={conversation}
+                        isActive={conversation.id === activeConversationId}
+                        index={index}
+                        onSelect={() => setActiveConversation(conversation.id)}
+                        onDelete={() => deleteConversation(conversation.id)}
+                        onTogglePin={() => togglePinConversation(conversation.id)}
+                        onArchive={() => archiveConversation(conversation.id)}
+                        onRename={(title) => renameConversation(conversation.id, title)}
+                        onDuplicate={() => duplicateConversation(conversation.id)}
+                        isPinned={true}
+                        searchQuery={searchQuery}
+                      />
+                    ))}
+
+                    {/* Separator */}
+                    {unpinnedConversations.length > 0 && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-dark-600 uppercase tracking-wider sticky top-6 bg-dark-900/95 backdrop-blur-sm z-10 border-t border-dark-800/50 mt-1 pt-2">
+                        Recent
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Unpinned/Recent Conversations */}
+                {unpinnedConversations.map((conversation, index) => (
                   <ConversationItem
                     key={conversation.id}
                     conversation={conversation}
@@ -344,35 +446,60 @@ export default function Sidebar() {
                     onSelect={() => setActiveConversation(conversation.id)}
                     onDelete={() => deleteConversation(conversation.id)}
                     onTogglePin={() => togglePinConversation(conversation.id)}
-                    isPinned={true}
+                    onArchive={() => archiveConversation(conversation.id)}
+                    onRename={(title) => renameConversation(conversation.id, title)}
+                    onDuplicate={() => duplicateConversation(conversation.id)}
+                    isPinned={false}
                     searchQuery={searchQuery}
                   />
                 ))}
-                
-                {/* Separator */}
-                {unpinnedConversations.length > 0 && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-dark-600 uppercase tracking-wider sticky top-6 bg-dark-900/95 backdrop-blur-sm z-10 border-t border-dark-800/50 mt-1 pt-2">
-                    Recent
-                  </div>
-                )}
-              </>
+              </div>
             )}
-            
-            {/* Unpinned/Recent Conversations */}
-            {unpinnedConversations.map((conversation, index) => (
-              <ConversationItem
-                key={conversation.id}
-                conversation={conversation}
-                isActive={conversation.id === activeConversationId}
-                index={index}
-                onSelect={() => setActiveConversation(conversation.id)}
-                onDelete={() => deleteConversation(conversation.id)}
-                onTogglePin={() => togglePinConversation(conversation.id)}
-                isPinned={false}
-                searchQuery={searchQuery}
-              />
-            ))}
-          </div>
+
+            {/* Archived section — rendered at the BOTTOM of the conversation
+                list. Only shows if there is at least one archived conversation.
+                Collapsible header with a count badge; clicking the header
+                toggles the list. Auto-expands when a search yields archived
+                matches so users can see + unarchive them without an extra
+                click. */}
+            {archivedConversationIds.length > 0 && (
+              <div className="archive-section mt-3 pt-2 border-t border-dark-800/50">
+                <button
+                  onClick={() => setArchivedExpanded((v) => !v)}
+                  className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-dark-500 uppercase tracking-wider hover:text-dark-300 transition-colors"
+                  aria-expanded={showArchivedList}
+                  title={showArchivedList ? 'Collapse archived' : 'Expand archived'}
+                >
+                  {showArchivedList ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                  <span>📦 Archived ({archivedConversations.length})</span>
+                </button>
+                <div
+                  className="archive-section-list overflow-hidden transition-all duration-300 ease-out"
+                  style={{
+                    maxHeight: showArchivedList ? '600px' : '0px',
+                    opacity: showArchivedList ? 1 : 0,
+                  }}
+                >
+                  <div className="space-y-0.5 pt-1">
+                    {archivedConversations.length === 0 ? (
+                      <p className="px-3 py-2 text-[11px] text-dark-600 italic">
+                        No archived conversations match this search.
+                      </p>
+                    ) : (
+                      archivedConversations.map((conversation) => (
+                        <ArchivedItem
+                          key={conversation.id}
+                          conversation={conversation}
+                          searchQuery={searchQuery}
+                          onUnarchive={() => unarchiveConversation(conversation.id)}
+                        />
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -431,6 +558,9 @@ function ConversationItem({
   onSelect,
   onDelete,
   onTogglePin,
+  onArchive,
+  onRename,
+  onDuplicate,
   isPinned = false,
   searchQuery = '',
 }: {
@@ -440,9 +570,47 @@ function ConversationItem({
   onSelect: () => void;
   onDelete: () => void;
   onTogglePin?: () => void;
+  onArchive?: () => void;
+  onRename?: (title: string) => void;
+  onDuplicate?: () => void;
   isPinned?: boolean;
   searchQuery?: string;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(conversation.title);
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  // Focus the input when entering edit mode.
+  useEffect(() => {
+    if (isEditing && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [isEditing]);
+
+  // Keep editValue in sync if the conversation title changes externally.
+  useEffect(() => {
+    if (!isEditing) setEditValue(conversation.title);
+  }, [conversation.title, isEditing]);
+
+  const startEditing = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditValue(conversation.title);
+    setIsEditing(true);
+  };
+
+  const commitEdit = () => {
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== conversation.title && onRename) {
+      onRename(trimmed);
+    }
+    setIsEditing(false);
+  };
+
+  const cancelEdit = () => {
+    setEditValue(conversation.title);
+    setIsEditing(false);
+  };
   // Get last message preview
   const lastMessage = conversation.messages[conversation.messages.length - 1];
   const messagePreview = lastMessage 
@@ -452,26 +620,8 @@ function ConversationItem({
   // Count user vs assistant messages
   const userMessageCount = conversation.messages.filter((m: any) => m.role === 'user').length;
 
-  // Highlight matching text (XSS-safe: escape HTML first, then wrap matches).
-  const escapeHtml = (s: string): string =>
-    s
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-
-  const highlightText = (text: string, query: string) => {
-    const escaped = escapeHtml(text);
-    if (!query) return escaped;
-    const safeQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`(${safeQuery})`, 'gi');
-    // Apply regex to the ESCAPED string so user content can never inject HTML.
-    return escaped.replace(
-      re,
-      '<mark class="rounded px-0.5" style="background: color-mix(in srgb, var(--cm-primary) 30%, transparent); color: var(--cm-primary);">$1</mark>'
-    );
-  };
+  // highlightText + escapeHtml are imported from the module scope (extracted
+  // there so ArchivedItem can share the same XSS-safe highlighting).
 
   return (
     <div
@@ -505,11 +655,32 @@ function ConversationItem({
         <div className="flex-1 min-w-0">
           {/* Title row */}
           <div className="flex items-center gap-2 mb-1">
-            <p className={`font-medium text-sm truncate ${
-              isActive ? 'text-white' : 'text-dark-200'
-            }`}
-            dangerouslySetInnerHTML={{ __html: highlightText(conversation.title, searchQuery) }}
-            />
+            {isEditing ? (
+              <input
+                ref={editInputRef}
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={commitEdit}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
+                  if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+                className="flex-1 min-w-0 px-1.5 py-0.5 text-sm font-medium bg-dark-900 border rounded-md focus:outline-none text-white rename-input"
+                style={{ borderColor: 'var(--cm-primary)' }}
+                aria-label="Edit conversation title"
+              />
+            ) : (
+              <p
+                className={`font-medium text-sm truncate flex-1 min-w-0 cursor-text ${
+                  isActive ? 'text-white' : 'text-dark-200'
+                }`}
+                onDoubleClick={onRename ? startEditing : undefined}
+                dangerouslySetInnerHTML={{ __html: highlightText(conversation.title, searchQuery) }}
+                title={onRename ? 'Double-click to rename' : undefined}
+              />
+            )}
             
             {/* Message count badge */}
             {userMessageCount > 0 && (
@@ -576,7 +747,61 @@ function ConversationItem({
               <Pin size={14} className={isPinned ? 'fill-current' : ''} />
             </button>
           )}
-          
+
+          {/* Archive button — hides the conversation without deleting it.
+              Restorable from the Archived section at the bottom of the list. */}
+          {onArchive && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onArchive();
+              }}
+              className={`shrink-0 p-1.5 rounded-lg transition-all duration-150 hover:text-[var(--cm-primary)] hover:bg-[color-mix(in_srgb,var(--cm-primary)_12%,transparent)] ${
+                isActive
+                  ? 'opacity-100 text-dark-400'
+                  : 'opacity-0 group-hover:opacity-100 text-dark-600'
+              }`}
+              title="Archive conversation (Alt+A)"
+            >
+              <Archive size={14} />
+            </button>
+          )}
+
+          {/* Rename button (inline edit) — round 9 */}
+          {onRename && !isEditing && (
+            <button
+              onClick={startEditing}
+              className={`shrink-0 p-1.5 rounded-lg transition-all duration-150 hover:text-[var(--cm-primary)] hover:bg-[color-mix(in_srgb,var(--cm-primary)_12%,transparent)] ${
+                isActive
+                  ? 'opacity-100 text-dark-400'
+                  : 'opacity-0 group-hover:opacity-100 text-dark-600'
+              }`}
+              title="Rename (double-click title or Alt+R)"
+              aria-label="Rename conversation"
+            >
+              <Edit2 size={13} />
+            </button>
+          )}
+
+          {/* Duplicate button — round 9 */}
+          {onDuplicate && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDuplicate();
+              }}
+              className={`shrink-0 p-1.5 rounded-lg transition-all duration-150 hover:text-[var(--cm-primary)] hover:bg-[color-mix(in_srgb,var(--cm-primary)_12%,transparent)] ${
+                isActive
+                  ? 'opacity-100 text-dark-400'
+                  : 'opacity-0 group-hover:opacity-100 text-dark-600'
+              }`}
+              title="Duplicate (Alt+D)"
+              aria-label="Duplicate conversation"
+            >
+              <Copy size={13} />
+            </button>
+          )}
+
           {/* Delete button */}
           <button
             onClick={(e) => {
@@ -606,6 +831,60 @@ function ConversationItem({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Archived Item Component — lightweight row for an archived conversation.
+// Renders with a muted/italic style. Clicking the row OR the Unarchive button
+// restores the conversation to the main list (per spec, the simplest UX:
+// clicking an archived item unarchives it).
+function ArchivedItem({
+  conversation,
+  searchQuery = '',
+  onUnarchive,
+}: {
+  conversation: Conversation;
+  searchQuery?: string;
+  onUnarchive: () => void;
+}) {
+  const lastMessage = conversation.messages[conversation.messages.length - 1];
+  const messagePreview = lastMessage
+    ? lastMessage.content.slice(0, 70).replace(/\n/g, ' ')
+    : 'No messages';
+
+  return (
+    <div
+      onClick={onUnarchive}
+      className="archived-item archived-enter group relative flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer opacity-60 italic hover:opacity-100 hover:bg-dark-800/60 transition-all duration-150"
+      title="Click to unarchive"
+    >
+      <Package size={12} className="shrink-0 text-dark-500" />
+
+      <div className="flex-1 min-w-0">
+        <p
+          className="text-xs text-dark-400 truncate font-medium"
+          dangerouslySetInnerHTML={{ __html: highlightText(conversation.title, searchQuery) }}
+        />
+        {lastMessage && (
+          <p
+            className="text-[11px] text-dark-600 truncate mt-0.5"
+            dangerouslySetInnerHTML={{ __html: highlightText(messagePreview, searchQuery) }}
+          />
+        )}
+      </div>
+
+      {/* Unarchive button — stops propagation so the row click doesn't double-fire. */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onUnarchive();
+        }}
+        className="shrink-0 p-1.5 rounded-lg text-dark-500 hover:text-[var(--cm-primary)] hover:bg-[color-mix(in_srgb,var(--cm-primary)_12%,transparent)] transition-all duration-150"
+        title="Unarchive conversation"
+      >
+        <ArchiveRestore size={13} />
+      </button>
     </div>
   );
 }

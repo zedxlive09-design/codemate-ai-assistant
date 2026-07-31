@@ -39,6 +39,9 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
     pinnedConversationIds,
     renameConversation,
     duplicateConversation,
+    archiveConversation,
+    unarchiveConversation,
+    archivedConversationIds,
   } = useStore();
   const { setTheme, cycleTheme, resetTheme, config } = useTheme();
 
@@ -163,6 +166,37 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
       category: 'chat',
       action: () => {
         if (activeConversationId) duplicateConversation(activeConversationId);
+        onClose();
+      },
+    },
+    {
+      id: 'archive-current-conversation',
+      // Label adapts to whether the active conversation is already archived
+      // (rare — archived convs aren't activated by default — but a safety net
+      // so the command is always reversible from the palette).
+      label: archivedConversationIds.includes(activeConversationId || '')
+        ? 'Unarchive Current Conversation'
+        : 'Archive Current Conversation',
+      shortcut: 'Alt+A',
+      icon: archivedConversationIds.includes(activeConversationId || '') ? '📤' : '📦',
+      category: 'chat',
+      action: () => {
+        if (!activeConversationId) { onClose(); return; }
+        if (archivedConversationIds.includes(activeConversationId)) {
+          unarchiveConversation(activeConversationId);
+        } else {
+          archiveConversation(activeConversationId);
+        }
+        onClose();
+      },
+    },
+    {
+      id: 'unarchive-current-conversation',
+      label: 'Unarchive Current Conversation',
+      icon: '📤',
+      category: 'chat',
+      action: () => {
+        if (activeConversationId) unarchiveConversation(activeConversationId);
         onClose();
       },
     },

@@ -5298,3 +5298,86 @@ button[aria-label="Export conversation as Markdown"]:hover {
 @media (prefers-reduced-motion: reduce) {
   .rename-flash, .duplicate-enter { animation: none; }
 }
+
+/* ============================================================
+   TASK 15-a — Archive conversation feature
+   Hides a conversation from the Sidebar's main list without deleting it;
+   restorable from the "📦 Archived" section at the bottom of the list.
+   ============================================================ */
+
+/* Archived conversation item — muted + italic to distinguish from active. */
+.archived-item {
+  /* opacity-60 + italic set via Tailwind classes on the element; this hook is
+     kept for downstream theme overrides (e.g. lowering contrast in light mode). */
+  transition: opacity 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+.archived-item:hover {
+  /* Subtle lift on hover so the row feels interactive even though it's muted. */
+  transform: translateX(2px);
+}
+
+/* Archive section collapsible list — the inline style on the element sets
+   `maxHeight` + `opacity`; this rule provides the transition timing. */
+.archive-section-list {
+  transition: max-height 300ms cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 220ms ease-out;
+}
+
+/* Slide-in animation for archived items — used when a conversation is freshly
+   archived (it slides down into the archive list) and when the section is
+   expanded (each item cascades in). The `both` fill mode keeps the start
+   state until the animation begins, so items don't flash on mount. */
+@keyframes archive-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 0.6; /* matches the .archived-item opacity-60 baseline */
+    transform: translateY(0) scale(1);
+  }
+}
+.archived-enter {
+  animation: archive-enter 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .archived-enter { animation: none; }
+  .archived-item:hover { transform: none; }
+  .archive-section-list { transition: none; }
+}
+
+
+/* ============================================================
+   ROUND 9 POLISH — Inline rename input, action buttons
+   ============================================================ */
+
+/* Inline rename input in the Sidebar ConversationItem */
+.rename-input {
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cm-primary) 20%, transparent);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.rename-input:focus {
+  border-color: var(--cm-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cm-primary) 25%, transparent);
+}
+
+/* Conversation item action buttons — consistent hover ring */
+.conversation-action-btn {
+  transition: all 150ms ease;
+}
+.conversation-action-btn:hover {
+  transform: translateY(-1px);
+}
+
+/* Subtle pulse when entering rename mode */
+@keyframes rename-mode-enter {
+  from { opacity: 0; transform: scaleX(0.96); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+.rename-input {
+  animation: rename-mode-enter 150ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rename-input { animation: none; }
+}

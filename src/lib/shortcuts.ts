@@ -88,6 +88,7 @@ export const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       { keys: ['Alt', 'P'], description: 'Pin / Unpin Current Conversation', category: 'Search' },
       { keys: ['Alt', 'R'], description: 'Rename Current Conversation', category: 'Search' },
       { keys: ['Alt', 'D'], description: 'Duplicate Current Conversation', category: 'Search' },
+      { keys: ['Alt', 'A'], description: 'Archive Current Conversation', category: 'Search' },
     ],
   },
   {

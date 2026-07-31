@@ -146,12 +146,17 @@ interface AppState {
   // Pinned Conversations
   pinnedConversationIds: string[];
   togglePinConversation: (id: string) => void;
-  
+
   // Conversation Tags
   conversationTags: Record<string, string[]>; // conversationId -> tagIds
   addTagToConversation: (conversationId: string, tagId: string) => void;
   removeTagFromConversation: (conversationId: string, tagId: string) => void;
-  
+
+  // Archived Conversations — hide without deleting; restorable via the Sidebar.
+  archivedConversationIds: string[];
+  archiveConversation: (id: string) => void;
+  unarchiveConversation: (id: string) => void;
+
   // Actions - Settings
   updateSettings: (settings: Partial<AppSettings>) => void;
 }
@@ -222,7 +227,8 @@ export const useStore = create<AppState>()(
       bookmarks: [],
       pinnedConversationIds: [],
       conversationTags: {},
-      
+      archivedConversationIds: [],
+
       settings: defaultSettings,
 
       // Conversation actions
@@ -533,6 +539,37 @@ export const useStore = create<AppState>()(
           },
         }));
       },
+
+      // Archived Conversations
+      // Adding to the archive hides the conversation from the main list. If
+      // the archived conversation was active, switch the active id to the
+      // first non-archived conversation (or null) so the chat area never
+      // displays an archived thread.
+      archiveConversation: (id: string) => {
+        set((state) => {
+          if (state.archivedConversationIds.includes(id)) return {};
+          const nextArchived = [...state.archivedConversationIds, id];
+          let nextActive = state.activeConversationId;
+          if (state.activeConversationId === id) {
+            const fallback = state.conversations.find(
+              (c) => c.id !== id && !nextArchived.includes(c.id)
+            );
+            nextActive = fallback?.id ?? null;
+          }
+          return {
+            archivedConversationIds: nextArchived,
+            activeConversationId: nextActive,
+          };
+        });
+      },
+
+      unarchiveConversation: (id: string) => {
+        set((state) => ({
+          archivedConversationIds: state.archivedConversationIds.filter(
+            (archivedId) => archivedId !== id
+          ),
+        }));
+      },
     }),
     {
       name: 'ai-assistant-storage',
@@ -544,6 +581,7 @@ export const useStore = create<AppState>()(
         inferenceSettings: state.inferenceSettings,
         settings: state.settings,
         projectPath: state.projectPath,
+        archivedConversationIds: state.archivedConversationIds,
       }),
       // Revive Date instances on every rehydrate (JSON stores them as strings).
       merge: (persistedState, currentState) => {

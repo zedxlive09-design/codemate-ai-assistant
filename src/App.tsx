@@ -97,7 +97,8 @@ export default function App() {
     togglePinConversation,
     pinnedConversationIds,
     renameConversation,
-    duplicateConversation
+    duplicateConversation,
+    archiveConversation
   } = useStore();
 
   const { isOpen: isPaletteOpen, setIsOpen: setIsPaletteOpen } = useCommandPalette();
@@ -498,6 +499,25 @@ export default function App() {
         }
       }
 
+      // Archive the active conversation (Alt+A) — Task 15-a.
+      // Plain Alt+A (no Ctrl/Cmd, no Shift) is conflict-free: every other
+      // binding in this handler starts with isMod. "A" mnemonic = Archive.
+      // Hides the conversation from the Sidebar's main list without deleting
+      // it; restorable from the "📦 Archived" section at the bottom of the list.
+      // If the archived conversation was active, the store auto-switches the
+      // active id to the first non-archived conversation (or null).
+      if (
+        !isMod &&
+        !e.shiftKey &&
+        e.altKey &&
+        (e.key === 'a' || e.key === 'A')
+      ) {
+        if (activeConversationId) {
+          e.preventDefault();
+          archiveConversation(activeConversationId);
+        }
+      }
+
       // Escape key - close panels.
       // Focus-mode exit takes priority over every other Escape handler so
       // users can always leave distraction-free mode with a single Esc.
@@ -555,6 +575,7 @@ export default function App() {
     togglePinConversation,
     renameConversation,
     duplicateConversation,
+    archiveConversation,
     conversations,
   ]);
 
