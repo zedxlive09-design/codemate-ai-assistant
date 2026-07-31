@@ -437,9 +437,21 @@ This is a **demo response** - I'm simulating what the AI would say.
 
       {/* Input area container */}
       <div className="p-4">
-        <div className={`relative flex items-end gap-3 bg-dark-800/60 rounded-2xl border border-dark-700/60 focus-within:border-primary-500/50 focus-within:ring-2 focus-within:ring-primary-500/10 transition-all duration-200 ${isGenerating ? 'opacity-75' : ''}`}>
+        <div
+          className={`relative flex items-end gap-3 bg-dark-800/60 rounded-2xl border border-dark-700/60 transition-all duration-200 ${isGenerating ? 'opacity-75' : ''}`}
+          style={{
+            // Theme-aware focus ring using the active --cm-primary var.
+            boxShadow: '0 0 0 0 transparent',
+          }}
+        >
+          <style>{`
+            .chat-input-shell:focus-within {
+              border-color: color-mix(in srgb, var(--cm-primary) 50%, transparent);
+              box-shadow: 0 0 0 2px color-mix(in srgb, var(--cm-primary) 12%, transparent);
+            }
+          `}</style>
           {/* Textarea container with max height scrolling */}
-          <div className="flex-1 relative overflow-hidden">
+          <div className="flex-1 relative overflow-hidden chat-input-shell w-full">
             <textarea
               ref={textareaRef}
               value={message}
@@ -448,22 +460,39 @@ This is a **demo response** - I'm simulating what the AI would say.
               onCompositionStart={() => setIsComposing(true)}
               onCompositionEnd={() => setIsComposing(false)}
               placeholder={
-                modelLoaded 
-                  ? "Ask me anything about coding..." 
+                modelLoaded
+                  ? "Ask me anything about coding..."
                   : "💬 Type a message (Demo Mode - no model loaded)..."
               }
               disabled={isGenerating}
               rows={1}
-              className="w-full px-4 py-3 bg-transparent resize-none focus:outline-none text-white placeholder-dark-500 disabled:cursor-not-allowed disabled:opacity-60 pr-16 max-h-[160px] overflow-y-auto custom-scrollbar leading-relaxed"
+              className="w-full px-4 py-3 bg-transparent resize-none focus:outline-none text-white placeholder-dark-500 disabled:cursor-not-allowed disabled:opacity-60 pr-28 max-h-[160px] overflow-y-auto custom-scrollbar leading-relaxed"
               style={{ minHeight: '48px' }}
             />
-            
-            {/* Character count (when near limit) */}
-            {message.length > 500 && (
-              <span className="absolute bottom-2 right-14 text-[10px] text-yellow-500 font-mono">
-                {message.length.toLocaleString()}
-              </span>
-            )}
+
+            {/* Live counter: chars / words / ~tokens (always visible, subtle) */}
+            <div className="absolute bottom-1.5 right-3 flex items-center gap-2 text-[10px] font-mono text-dark-500 pointer-events-none select-none">
+              {(() => {
+                const chars = message.length;
+                const words = message.trim() ? message.trim().split(/\s+/).length : 0;
+                // Rough token estimate: ~4 chars per token for English/code.
+                const tokens = Math.ceil(chars / 4);
+                return (
+                  <>
+                    <span title="characters">{chars}</span>
+                    <span className="text-dark-700">·</span>
+                    <span title="words">{words}w</span>
+                    <span className="text-dark-700">·</span>
+                    <span
+                      title="estimated tokens (~4 chars/token)"
+                      className={tokens > 2000 ? 'text-amber-500' : ''}
+                    >
+                      ~{tokens}t
+                    </span>
+                  </>
+                );
+              })()}
+            </div>
           </div>
 
           {/* Action buttons */}

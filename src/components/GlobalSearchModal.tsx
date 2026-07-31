@@ -3,18 +3,9 @@ import { Search, X, MessageSquare, User, Bot, Clock } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import type { Message } from '../types';
 
-// ---------------------------------------------------------------------------
-// Event bus — lets CommandPalette (or anything else) ask App.tsx to open the
-// modal without prop-drilling. App.tsx listens for this CustomEvent and flips
-// its local `showGlobalSearch` state. We deliberately avoid touching the
-// Zustand store (out of scope for this task).
-// ---------------------------------------------------------------------------
-const GLOBAL_SEARCH_OPEN_EVENT = 'codemate:open-global-search';
-
-/** Dispatch a window event that App.tsx listens for to open the modal. */
-export function openGlobalSearch(): void {
-  window.dispatchEvent(new CustomEvent(GLOBAL_SEARCH_OPEN_EVENT));
-}
+// The open-modal event bus now lives in src/lib/modalEvents.ts so that
+// CommandPalette can import the helper WITHOUT statically importing this
+// (heavy) component module — keeping it out of the entry chunk.
 
 // ---------------------------------------------------------------------------
 // Props

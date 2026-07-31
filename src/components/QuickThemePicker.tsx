@@ -254,11 +254,7 @@ function Swatch({ id }: { id: string }) {
   );
 }
 
-/**
- * Open the quick theme picker from anywhere (e.g. CommandPalette) by emitting
- * a window event that App.tsx listens for — avoids prop-drilling / store edits.
- */
-export function openQuickThemePicker(): void {
-  if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent('codemate:open-quick-theme-picker'));
-}
+// The openQuickThemePicker() helper now lives in src/lib/modalEvents.ts so
+// that CommandPalette can import it WITHOUT statically importing this
+// component module — keeping this code out of the entry chunk (lazy-loaded
+// via React.lazy in App.tsx).

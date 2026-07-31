@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useState, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import FileExplorer from './components/FileExplorer';
@@ -34,8 +34,14 @@ import { useTheme } from './hooks/useTheme';
 import { getPresetById } from './lib/themePresets';
 import { useCommandPalette } from './components/CommandPalette';
 import { useKeyboardShortcuts } from './components/KeyboardShortcuts';
-import GlobalSearchModal from './components/GlobalSearchModal';
-import QuickThemePicker from './components/QuickThemePicker';
+import FocusMode from './components/FocusMode';
+
+// Lazy-load the heavier modals so their code is fetched only when first
+// opened, keeping the initial entry chunk smaller. The named event-bus
+// helpers (openGlobalSearch / openQuickThemePicker) are imported separately
+// in CommandPalette.tsx (not here) so they don't pull the component code in.
+const LazyGlobalSearchModal = React.lazy(() => import('./components/GlobalSearchModal'));
+const LazyQuickThemePicker = React.lazy(() => import('./components/QuickThemePicker'));
 
 export default function App() {
   const { 
@@ -95,6 +101,142 @@ export default function App() {
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [showQuickThemePicker, setShowQuickThemePicker] = useState(false);
+
+  // Focus Mode (Task 11-b): distraction-free mode that hides sidebar + every
+  // side panel + toolbar row + status footer, expanding chat to full width.
+  // Managed as LOCAL state (can't edit useStore.ts) so we snapshot the
+  // pre-focus panel flags into a ref and restore them on exit.
+  const [focusMode, setFocusMode] = useState(false);
+  type PanelSnapshot = {
+    sidebarOpen: boolean;
+    showFileExplorer: boolean;
+    showSettings: boolean;
+    showModelManager: boolean;
+    showTerminal: boolean;
+    showActivityPanel: boolean;
+    showConversationManager: boolean;
+    showSnippetsPanel: boolean;
+    showGitPanel: boolean;
+    showCodeEditor: boolean;
+    showVoiceInput: boolean;
+    showBookmarks: boolean;
+    showThemeCustomizer: boolean;
+    showQuickActions: boolean;
+    showPluginManager: boolean;
+    showAISettings: boolean;
+    showStatsPanel: boolean;
+    showProfilePanel: boolean;
+    showMemoryPanel: boolean;
+  };
+  const prevPanelState = useRef<PanelSnapshot | null>(null);
+
+  // Enter focus mode: snapshot current show* flags, then close every open
+  // panel + collapse the sidebar. Snapshot is restored on exit.
+  const enterFocusMode = useCallback(() => {
+    // Avoid double-snapshots if enter is somehow called while already in focus.
+    if (prevPanelState.current) return;
+    prevPanelState.current = {
+      sidebarOpen,
+      showFileExplorer,
+      showSettings,
+      showModelManager,
+      showTerminal,
+      showActivityPanel,
+      showConversationManager,
+      showSnippetsPanel,
+      showGitPanel,
+      showCodeEditor,
+      showVoiceInput,
+      showBookmarks,
+      showThemeCustomizer,
+      showQuickActions,
+      showPluginManager,
+      showAISettings,
+      showStatsPanel,
+      showProfilePanel,
+      showMemoryPanel,
+    };
+    // Close every open panel. We only toggle the ones currently open so we
+    // don't accidentally open ones that were closed (toggle is a flip).
+    if (showFileExplorer) toggleFileExplorer();
+    if (showSettings) toggleSettings();
+    if (showModelManager) toggleModelManager();
+    if (showTerminal) toggleTerminal();
+    if (showActivityPanel) toggleActivityPanel();
+    if (showConversationManager) toggleConversationManager();
+    if (showSnippetsPanel) toggleSnippetsPanel();
+    if (showGitPanel) toggleGitPanel();
+    if (showCodeEditor) toggleCodeEditor();
+    if (showVoiceInput) toggleVoiceInput();
+    if (showBookmarks) toggleBookmarks();
+    if (showThemeCustomizer) toggleThemeCustomizer();
+    if (showQuickActions) toggleQuickActions();
+    if (showPluginManager) togglePluginManager();
+    if (showAISettings) toggleAISettings();
+    if (showStatsPanel) toggleStatsPanel();
+    if (showProfilePanel) toggleProfilePanel();
+    if (showMemoryPanel) toggleMemoryPanel();
+    if (sidebarOpen) toggleSidebar();
+    setFocusMode(true);
+  }, [
+    sidebarOpen, showFileExplorer, showSettings, showModelManager, showTerminal,
+    showActivityPanel, showConversationManager, showSnippetsPanel, showGitPanel,
+    showCodeEditor, showVoiceInput, showBookmarks, showThemeCustomizer,
+    showQuickActions, showPluginManager, showAISettings, showStatsPanel,
+    showProfilePanel, showMemoryPanel,
+    toggleFileExplorer, toggleSettings, toggleModelManager, toggleTerminal,
+    toggleActivityPanel, toggleConversationManager, toggleSnippetsPanel,
+    toggleGitPanel, toggleCodeEditor, toggleVoiceInput, toggleBookmarks,
+    toggleThemeCustomizer, toggleQuickActions, togglePluginManager,
+    toggleAISettings, toggleStatsPanel, toggleProfilePanel, toggleMemoryPanel,
+    toggleSidebar,
+  ]);
+
+  // Exit focus mode: restore the snapshot by re-toggling every flag that was
+  // open before focus mode started.
+  const exitFocusMode = useCallback(() => {
+    const snap = prevPanelState.current;
+    if (!snap) {
+      setFocusMode(false);
+      return;
+    }
+    // Re-open only the ones that were open before (toggle flips closed -> open).
+    if (snap.showFileExplorer) toggleFileExplorer();
+    if (snap.showSettings) toggleSettings();
+    if (snap.showModelManager) toggleModelManager();
+    if (snap.showTerminal) toggleTerminal();
+    if (snap.showActivityPanel) toggleActivityPanel();
+    if (snap.showConversationManager) toggleConversationManager();
+    if (snap.showSnippetsPanel) toggleSnippetsPanel();
+    if (snap.showGitPanel) toggleGitPanel();
+    if (snap.showCodeEditor) toggleCodeEditor();
+    if (snap.showVoiceInput) toggleVoiceInput();
+    if (snap.showBookmarks) toggleBookmarks();
+    if (snap.showThemeCustomizer) toggleThemeCustomizer();
+    if (snap.showQuickActions) toggleQuickActions();
+    if (snap.showPluginManager) togglePluginManager();
+    if (snap.showAISettings) toggleAISettings();
+    if (snap.showStatsPanel) toggleStatsPanel();
+    if (snap.showProfilePanel) toggleProfilePanel();
+    if (snap.showMemoryPanel) toggleMemoryPanel();
+    if (snap.sidebarOpen) toggleSidebar();
+    prevPanelState.current = null;
+    setFocusMode(false);
+  }, [
+    toggleFileExplorer, toggleSettings, toggleModelManager, toggleTerminal,
+    toggleActivityPanel, toggleConversationManager, toggleSnippetsPanel,
+    toggleGitPanel, toggleCodeEditor, toggleVoiceInput, toggleBookmarks,
+    toggleThemeCustomizer, toggleQuickActions, togglePluginManager,
+    toggleAISettings, toggleStatsPanel, toggleProfilePanel, toggleMemoryPanel,
+    toggleSidebar,
+  ]);
+
+  // Toggle handler: enters if not in focus, exits if in focus.
+  const toggleFocusMode = useCallback(() => {
+    if (focusMode) exitFocusMode();
+    else enterFocusMode();
+  }, [focusMode, enterFocusMode, exitFocusMode]);
+
   const shouldShowOnboarding = useShouldShowOnboarding(); // Returns boolean from hook
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const showOnboarding = shouldShowOnboarding && !onboardingDismissed;
@@ -274,8 +416,23 @@ export default function App() {
         setShowQuickThemePicker(true);
       }
 
-      // Escape key - close panels
+      // Focus Mode toggle (Ctrl+Shift+L) — Task 11-b.
+      // Enters focus mode if not active; exits if active. The exit path also
+      // runs from the Escape branch below + the FocusMode pill.
+      if (isMod && e.shiftKey && (e.key === 'L' || e.key === 'l')) {
+        e.preventDefault();
+        toggleFocusMode();
+      }
+
+      // Escape key - close panels.
+      // Focus-mode exit takes priority over every other Escape handler so
+      // users can always leave distraction-free mode with a single Esc.
       if (e.key === 'Escape') {
+        if (focusMode) {
+          e.preventDefault();
+          exitFocusMode();
+          return;
+        }
         if (isPaletteOpen) setIsPaletteOpen(false);
         if (showShortcuts) setShowShortcuts(false);
         if (showDownloadModal) setShowDownloadModal(false);
@@ -294,6 +451,7 @@ export default function App() {
     showNotificationModal,
     showGlobalSearch,
     showQuickThemePicker,
+    focusMode,
     setIsPaletteOpen,
     setShowShortcuts,
     toggleSidebar,
@@ -314,8 +472,19 @@ export default function App() {
     toggleAISettings,
     toggleFloatingBar,
     toggleStatsPanel,
-    toggleProfilePanel
+    toggleProfilePanel,
+    toggleFocusMode,
+    exitFocusMode,
   ]);
+
+  // Listen for the cross-component "toggle focus mode" event so the
+  // CommandPalette (or any other caller) can toggle focus mode without
+  // prop-drilling the open-state through the component tree (Task 11-b).
+  useEffect(() => {
+    const handler = () => toggleFocusMode();
+    window.addEventListener('codemate:toggle-focus-mode', handler);
+    return () => window.removeEventListener('codemate:toggle-focus-mode', handler);
+  }, [toggleFocusMode]);
 
   // Listen for the cross-component "open global search" event so the
   // CommandPalette (or any other caller) can open this modal without
@@ -336,17 +505,18 @@ export default function App() {
 
   return (
     <ToastProvider>
-      <div className="flex h-screen bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 overflow-hidden">
+      <div className={`flex h-screen bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 overflow-hidden ${focusMode ? 'focus-mode-active' : ''}`}>
         {/* Particle Background Effect */}
         <div className="particle-bg fixed inset-0 pointer-events-none z-0" />
         
-        {/* Sidebar */}
-        <Sidebar />
+        {/* Sidebar — hidden entirely while in focus mode (conditional render
+            avoids fragile CSS selectors against a sibling Sidebar root). */}
+        {!focusMode && <Sidebar />}
 
         {/* Main Content */}
         <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarOpen ? 'ml-0' : 'ml-0'} relative z-10`}>
           {/* Demo-mode banner (browser only, dismissible) */}
-          <DemoModeBanner />
+          {!focusMode && <DemoModeBanner />}
           {/* Header */}
           <header className="header-glow h-14 border-b border-slate-700/50 flex items-center justify-between px-4 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40">
             <div className="flex items-center gap-3">
@@ -361,7 +531,8 @@ export default function App() {
               </span>
             </div>
 
-            {/* Toolbar */}
+            {/* Toolbar — hidden while in focus mode (keep only logo + title). */}
+            {!focusMode && (
             <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
               {/* Core Panels */}
               <ToolbarButton icon={<FileIcon />} label="Files" active={showFileExplorer} onClick={toggleFileExplorer} shortcut="Ctrl+E" color="yellow" />
@@ -400,18 +571,31 @@ export default function App() {
               <ToolbarButton icon={<StatsIcon />} label="Stats" active={showStatsPanel} onClick={toggleStatsPanel} shortcut="Alt+Ctrl+S" color="lime" />
               <ToolbarButton icon={<ProfileIcon />} label="Profile" active={showProfilePanel} onClick={toggleProfilePanel} shortcut="Alt+Ctrl+P" color="sky" />
             </div>
+            )}
 
-            {/* Right side actions */}
+            {/* Right side actions — in focus mode this collapses to a small
+                "Exit Focus" button so the header keeps a useful action.
+                Otherwise keep the Command Palette search button. */}
             <div className="flex items-center gap-2 ml-4">
-              <button
-                onClick={() => setIsPaletteOpen(true)}
-                className="toolbar-btn p-2 rounded-lg hover:bg-slate-700/50 transition-all duration-200 group"
-                title="Command Palette (Ctrl+K)"
-              >
-                <svg className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </button>
+              {focusMode ? (
+                <button
+                  onClick={exitFocusMode}
+                  className="toolbar-btn px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-200"
+                  title="Exit Focus Mode (Ctrl+Shift+L or Esc)"
+                >
+                  Exit Focus
+                </button>
+              ) : (
+                <button
+                  onClick={() => setIsPaletteOpen(true)}
+                  className="toolbar-btn p-2 rounded-lg hover:bg-slate-700/50 transition-all duration-200 group"
+                  title="Command Palette (Ctrl+K)"
+                >
+                  <svg className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </button>
+              )}
             </div>
           </header>
 
@@ -433,7 +617,8 @@ export default function App() {
             )}
           </main>
 
-          {/* Status Bar */}
+          {/* Status Bar — hidden while in focus mode (distraction-free). */}
+          {!focusMode && (
           <footer className="status-bar-glow h-7 border-t border-slate-700/50 flex items-center justify-between px-4 text-xs text-slate-400 bg-slate-900/80 backdrop-blur-md relative z-20">
             <div className="flex items-center gap-4">
               <span className={`flex items-center gap-1.5 ${isGenerating ? 'text-emerald-400' : ''}`}>
@@ -451,9 +636,12 @@ export default function App() {
               <span className="text-violet-400">Phase 6</span>
             </div>
           </footer>
+          )}
         </div>
 
-        {/* Side Panels Container */}
+        {/* Side Panels Container — suppressed entirely while in focus mode
+            so no overlay panel can pop over the chat. */}
+        {!focusMode && (
         <div className="fixed inset-0 pointer-events-none z-30">
           {/* File Explorer - Left Panel */}
           {showFileExplorer && (
@@ -555,16 +743,26 @@ export default function App() {
             </div>
           )}
         </div>
+        )}
 
-        {/* Floating Action Bar */}
-        <FloatingBar onAction={(action) => console.log('Floating bar action:', action)} />
+        {/* Floating Action Bar — hidden while in focus mode. */}
+        {!focusMode && <FloatingBar onAction={(action) => console.log('Floating bar action:', action)} />}
 
         {/* Modals */}
         <CommandPalette isOpen={isPaletteOpen} onClose={() => setIsPaletteOpen(false)} />
-        <GlobalSearchModal isOpen={showGlobalSearch} onClose={() => setShowGlobalSearch(false)} />
+        {/* GlobalSearchModal — lazy-loaded (round 5) */}
+        {showGlobalSearch && (
+          <React.Suspense fallback={null}>
+            <LazyGlobalSearchModal isOpen={showGlobalSearch} onClose={() => setShowGlobalSearch(false)} />
+          </React.Suspense>
+        )}
 
-        {/* Quick Theme Picker — Ctrl+Alt+Y (round 4) */}
-        <QuickThemePicker isOpen={showQuickThemePicker} onClose={() => setShowQuickThemePicker(false)} />
+        {/* Quick Theme Picker — Ctrl+Alt+Y (round 4); lazy-loaded (round 5) */}
+        {showQuickThemePicker && (
+          <React.Suspense fallback={null}>
+            <LazyQuickThemePicker isOpen={showQuickThemePicker} onClose={() => setShowQuickThemePicker(false)} />
+          </React.Suspense>
+        )}
         <KeyboardShortcuts isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
         
         {/* Model Download Modal */}
@@ -592,6 +790,11 @@ export default function App() {
 
         {/* Ctrl+Alt+T theme-cycle shortcut + toast (round 3) */}
         <ThemeCycleHandler />
+
+        {/* Focus Mode floating Exit pill + enter-toast (Task 11-b).
+            Rendered only while focusMode is true; lives inside ToastProvider
+            so it can call useToast() for the enter hint. */}
+        {focusMode && <FocusMode onExit={exitFocusMode} />}
       </div>
     </ToastProvider>
   );

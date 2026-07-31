@@ -2,8 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { useTheme } from '../hooks/useTheme';
 import { THEME_PRESETS, getPresetById } from '../lib/themePresets';
-import { openGlobalSearch } from './GlobalSearchModal';
-import { openQuickThemePicker } from './QuickThemePicker';
+import { openGlobalSearch, openQuickThemePicker, toggleFocusMode } from '../lib/modalEvents';
 
 // Types
 interface CommandItem {
@@ -34,7 +33,7 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
     toggleThemeCustomizer,
     setProjectPath,
   } = useStore();
-  const { setTheme, cycleTheme, config } = useTheme();
+  const { setTheme, cycleTheme, resetTheme, config } = useTheme();
 
   // Build commands list
   const commands: CommandItem[] = [
@@ -174,6 +173,19 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
         onClose();
       },
     },
+    {
+      id: 'toggle-focus-mode',
+      label: 'Toggle Focus Mode',
+      shortcut: 'Ctrl+Shift+L',
+      icon: '🎯',
+      category: 'view',
+      action: () => {
+        // Dispatch the cross-component event; App.tsx listens and toggles
+        // its local focusMode state (which snapshots/restores panel flags).
+        toggleFocusMode();
+        onClose();
+      },
+    },
     // Settings
     {
       id: 'change-theme',
@@ -224,6 +236,33 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
       category: 'settings',
       action: () => {
         openQuickThemePicker();
+        onClose();
+      },
+    },
+    {
+      id: 'random-theme',
+      label: 'Surprise Me (Random Theme)',
+      icon: '🎲',
+      category: 'settings',
+      action: () => {
+        // Pick a random preset different from the current one.
+        const currentId = config.presetId;
+        const candidates = THEME_PRESETS.filter((p) => p.id !== currentId);
+        const pick = candidates[Math.floor(Math.random() * candidates.length)];
+        setTheme({ presetId: pick.id, font: config.font, radius: config.radius });
+        const orig = document.title;
+        document.title = `Theme: ${pick.name}`;
+        setTimeout(() => { document.title = orig; }, 1200);
+        onClose();
+      },
+    },
+    {
+      id: 'reset-theme',
+      label: 'Reset Theme to Default',
+      icon: '↩️',
+      category: 'settings',
+      action: () => {
+        resetTheme();
         onClose();
       },
     },
