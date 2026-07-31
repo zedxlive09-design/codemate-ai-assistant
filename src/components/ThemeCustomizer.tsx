@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
+import { useTheme, type ThemeConfig } from '../hooks/useTheme';
 import { Palette, Sparkles, RotateCcw, Eye, Download, Upload, Check, Star, Zap } from 'lucide-react';
 
 interface ColorPreset {
@@ -214,18 +215,41 @@ const borderRadiusOptions: BorderRadiusOption[] = [
 
 export default function ThemeCustomizer() {
   const { settings, updateSettings } = useStore();
+  const { config, setTheme, resetTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<'colors' | 'fonts' | 'effects'>('colors');
-  const [selectedPreset, setSelectedPreset] = useState<number>(0);
+
+  // Derive initial UI state from the persisted theme config (so it survives reloads).
+  const initialPresetIndex = (() => {
+    const idx = colorPresets.findIndex(
+      (p) => p.name.toLowerCase().replace(/\s+/g, '-') === config.presetId
+    );
+    return idx >= 0 ? idx : 0;
+  })();
+  const [selectedPreset, setSelectedPreset] = useState(initialPresetIndex);
   const [customColors, setCustomColors] = useState({
-    primary: colorPresets[0].primary,
-    secondary: colorPresets[0].secondary,
-    accent: colorPresets[0].accent,
+    primary: config.custom?.primary || colorPresets[initialPresetIndex].primary,
+    secondary: config.custom?.secondary || colorPresets[initialPresetIndex].secondary,
+    accent: config.custom?.accent || colorPresets[initialPresetIndex].accent,
   });
-  const [selectedFont, setSelectedFont] = useState(0);
-  const [borderRadius, setBorderRadius] = useState(1);
+  const initialFontIndex = (() => {
+    const idx = fontOptions.findIndex((f) => f.value === config.font);
+    return idx >= 0 ? idx : 0;
+  })();
+  const [selectedFont, setSelectedFont] = useState(initialFontIndex);
+  const initialRadiusIndex = (() => {
+    const idx = borderRadiusOptions.findIndex((o) => o.value === config.radius);
+    return idx >= 0 ? idx : 1;
+  })();
+  const [borderRadius, setBorderRadius] = useState(initialRadiusIndex);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [compactMode, setCompactMode] = useState(false);
   const [glassIntensity, setGlassIntensity] = useState(50);
+
+  // Keep UI in sync if the persisted config changes externally.
+  useEffect(() => {
+    setSelectedPreset(initialPresetIndex);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.presetId]);
 
   const applyPreset = (preset: ColorPreset, index: number) => {
     setSelectedPreset(index);
@@ -234,25 +258,50 @@ export default function ThemeCustomizer() {
       secondary: preset.secondary,
       accent: preset.accent,
     });
-    
-    // Apply CSS variables
-    document.documentElement.style.setProperty('--color-primary', preset.primary);
-    document.documentElement.style.setProperty('--color-secondary', preset.secondary);
-    document.documentElement.style.setProperty('--color-accent', preset.accent);
-    document.documentElement.style.setProperty('--color-background', preset.background);
-    document.documentElement.style.setProperty('--color-surface', preset.surface);
-    
-    updateSettings({ theme: preset.name.toLowerCase().replace(' ', '-') });
+    const presetId = preset.name.toLowerCase().replace(/\s+/g, '-');
+    // Apply preset vars (clearing any prior custom overrides so the preset wins).
+    const next: ThemeConfig = {
+      presetId,
+      font: fontOptions[selectedFont].value,
+      radius: borderRadiusOptions[borderRadius].value,
+    };
+    setTheme(next);
+    updateSettings({ theme: presetId });
+  };
+
+  const applyCustomColor = (key: 'primary' | 'secondary' | 'accent', value: string) => {
+    const nextColors = { ...customColors, [key]: value };
+    setCustomColors(nextColors);
+    const next: ThemeConfig = {
+      presetId: 'custom',
+      custom: nextColors,
+      font: fontOptions[selectedFont].value,
+      radius: borderRadiusOptions[borderRadius].value,
+    };
+    setTheme(next);
+    updateSettings({ theme: 'custom' });
   };
 
   const applyFont = (font: FontOption, index: number) => {
     setSelectedFont(index);
-    document.documentElement.style.setProperty('--font-family', font.value);
+    const next: ThemeConfig = {
+      presetId: config.presetId,
+      custom: config.custom,
+      font: font.value,
+      radius: borderRadiusOptions[borderRadius].value,
+    };
+    setTheme(next);
   };
 
   const applyBorderRadius = (option: BorderRadiusOption, index: number) => {
     setBorderRadius(index);
-    document.documentElement.style.setProperty('--border-radius', option.value);
+    const next: ThemeConfig = {
+      presetId: config.presetId,
+      custom: config.custom,
+      font: fontOptions[selectedFont].value,
+      radius: option.value,
+    };
+    setTheme(next);
   };
 
   return (
@@ -274,8 +323,13 @@ export default function ThemeCustomizer() {
         {/* Preview Button */}
         <button 
           onClick={() => {
-            // Reset to default
-            applyPreset(colorPresets[0], 0);
+            resetTheme();
+            setSelectedPreset(0);
+            setCustomColors({
+              primary: colorPresets[0].primary,
+              secondary: colorPresets[0].secondary,
+              accent: colorPresets[0].accent,
+            });
             setSelectedFont(0);
             setBorderRadius(1);
           }}
@@ -353,23 +407,24 @@ export default function ThemeCustomizer() {
               </label>
               <div className="space-y-3">
                 {[
-                  { label: 'Primary', key: 'primary', color: customColors.primary },
-                  { label: 'Secondary', key: 'secondary', color: customColors.secondary },
-                  { label: 'Accent', key: 'accent', color: customColors.accent },
+                  { label: 'Primary', key: 'primary' as const, color: customColors.primary },
+                  { label: 'Secondary', key: 'secondary' as const, color: customColors.secondary },
+                  { label: 'Accent', key: 'accent' as const, color: customColors.accent },
                 ].map(({ label, key, color }) => (
                   <div key={key} className="flex items-center gap-3">
-                    <div 
-                      className="w-10 h-10 rounded-lg cursor-pointer border-2 border-white/20 hover:border-white/40 transition-all hover:scale-105"
+                    <label
+                      className="relative w-10 h-10 rounded-lg cursor-pointer border-2 border-white/20 hover:border-white/40 transition-all hover:scale-105 overflow-hidden shrink-0"
                       style={{ backgroundColor: color }}
-                      onClick={() => {
-                        // Simulate color picker (would use actual input in production)
-                        const newColor = prompt(`Enter ${label} color (hex):`, color);
-                        if (newColor && /^#[0-9A-Fa-f]{6}$/.test(newColor)) {
-                          setCustomColors(prev => ({ ...prev, [key]: newColor }));
-                          document.documentElement.style.setProperty(`--color-${key}`, newColor);
-                        }
-                      }}
-                    />
+                      title={`Pick ${label} color`}
+                    >
+                      <input
+                        type="color"
+                        value={color}
+                        onChange={(e) => applyCustomColor(key, e.target.value)}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        aria-label={`${label} color picker`}
+                      />
+                    </label>
                     <div className="flex-1">
                       <span className="text-sm text-slate-300">{label}</span>
                       <span className="ml-2 text-xs text-slate-500 font-mono">{color}</span>

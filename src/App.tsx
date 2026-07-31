@@ -25,8 +25,12 @@ import StatsDashboard from './components/StatsDashboard';
 import ProfilePanel from './components/ProfilePanel';
 import MemoryPanel from './components/MemoryPanel';
 import OnboardingWizard, { useShouldShowOnboarding } from './components/OnboardingWizard';
+import TokenUsageHUD from './components/TokenUsageHUD';
+import FeatureShowcase from './components/FeatureShowcase';
+import DemoModeBanner from './components/DemoModeBanner';
 import { ToastProvider } from './components/Toast';
 import { useStore } from './store/useStore';
+import { useTheme } from './hooks/useTheme';
 import { useCommandPalette } from './components/CommandPalette';
 import { useKeyboardShortcuts } from './components/KeyboardShortcuts';
 
@@ -54,6 +58,8 @@ export default function App() {
     showProfilePanel,
     showMemoryPanel,
     isGenerating,
+    activeConversationId,
+    conversations,
     toggleSidebar,
     toggleSettings,
     toggleFileExplorer,
@@ -87,6 +93,16 @@ export default function App() {
   const shouldShowOnboarding = useShouldShowOnboarding(); // Returns boolean from hook
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const showOnboarding = shouldShowOnboarding && !onboardingDismissed;
+
+  // Feature showcase is shown over the chat area only when there is no
+  // active conversation, or the active conversation has zero messages.
+  const activeConversation = activeConversationId
+    ? conversations.find((c) => c.id === activeConversationId)
+    : undefined;
+  const showFeatureShowcase = !activeConversation || activeConversation.messages.length === 0;
+
+  // Apply + persist the visual theme (CSS --cm-* vars + data-theme attribute).
+  useTheme();
 
   // Voice input transcript handler
   const handleVoiceTranscript = useCallback((text: string) => {
@@ -293,10 +309,12 @@ export default function App() {
 
         {/* Main Content */}
         <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarOpen ? 'ml-0' : 'ml-0'} relative z-10`}>
+          {/* Demo-mode banner (browser only, dismissible) */}
+          <DemoModeBanner />
           {/* Header */}
           <header className="header-glow h-14 border-b border-slate-700/50 flex items-center justify-between px-4 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40">
             <div className="flex items-center gap-3">
-              <div className="logo-pulse w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/25">
+              <div className="logo-pulse w-8 h-8 rounded-lg cm-gradient-primary flex items-center justify-center shadow-lg" style={{ boxShadow: '0 8px 24px -8px var(--cm-primary)' }}>
                 <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
@@ -364,6 +382,10 @@ export default function App() {
           {/* Main Chat Area */}
           <main className="flex-1 overflow-hidden relative">
             <ChatArea />
+
+            {/* Feature Showcase Overlay — only when there's no active
+                conversation (or active conversation has 0 messages). */}
+            {showFeatureShowcase && <FeatureShowcase />}
             
             {/* Stats Dashboard Overlay */}
             {showStatsPanel && (
@@ -524,6 +546,9 @@ export default function App() {
             onClose={() => setOnboardingDismissed(true)}
           />
         )}
+
+        {/* TokenUsageHUD — live generation stats pill (Task 8-b) */}
+        <TokenUsageHUD />
       </div>
     </ToastProvider>
   );

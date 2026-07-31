@@ -4687,3 +4687,213 @@ a:active {
 *::-webkit-scrollbar-thumb:hover {
   background-color: rgba(148, 163, 184, 0.55);
 }
+
+/* ============================================================
+ * TokenUsageHUD — fade/scale-in animation (Task 8-b).
+ * Append-only addition; no existing rules modified.
+ * ============================================================ */
+
+/* Define --cm-primary so consumers (e.g. the throughput bars) have a
+   concrete value to use; consumers should still provide their own
+   fallback via var(--cm-primary, <fallback>). */
+:root {
+  --cm-primary: rgb(56 189 248);
+}
+
+@keyframes token-hud-enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+.token-hud-enter {
+  animation: token-hud-enter 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .token-hud-enter {
+    animation: none;
+  }
+}
+
+
+/* ============================================================
+   CODEMATE THEME SYSTEM (round 2)
+   - --cm-* design tokens consumed by utility classes + key surfaces
+   - [data-theme="..."] rules for each ThemeCustomizer preset
+   - Theme is applied by useTheme hook (persisted in localStorage)
+   ============================================================ */
+
+:root {
+  /* Default = "CodeMate" preset (indigo/violet on near-black) */
+  --cm-primary: #6366f1;
+  --cm-secondary: #8b5cf6;
+  --cm-accent: #a78bfa;
+  --cm-bg-from: #0d1117;
+  --cm-bg-via: #0f172a;
+  --cm-bg-to: #1e293b;
+  --cm-surface: #161b22;
+  --cm-surface-2: #1e293b;
+  --cm-text: #e6edf3;
+  --cm-text-muted: #94a3b8;
+  --cm-border: rgba(148, 163, 184, 0.18);
+  --cm-radius: 8px;
+  --cm-font: 'Inter', system-ui, sans-serif;
+  --cm-glow: 0 0 24px -4px;
+}
+
+/* ---- Per-preset theme rules ---- */
+[data-theme="codemate"] {
+  --cm-primary: #6366f1; --cm-secondary: #8b5cf6; --cm-accent: #a78bfa;
+  --cm-bg-from: #0d1117; --cm-bg-via: #0f172a; --cm-bg-to: #1e293b;
+  --cm-surface: #161b22; --cm-surface-2: #1e293b; --cm-text: #e6edf3;
+}
+[data-theme="ocean-blue"] {
+  --cm-primary: #0ea5e9; --cm-secondary: #06b6d4; --cm-accent: #22d3ee;
+  --cm-bg-from: #0f172a; --cm-bg-via: #0c1a2e; --cm-bg-to: #1e293b;
+  --cm-surface: #1e293b; --cm-surface-2: #243449; --cm-text: #e2e8f0;
+}
+[data-theme="purple-haze"] {
+  --cm-primary: #8b5cf6; --cm-secondary: #a855f7; --cm-accent: #c084fc;
+  --cm-bg-from: #1a1025; --cm-bg-via: #160d22; --cm-bg-to: #2d1b4e;
+  --cm-surface: #2d1b4e; --cm-surface-2: #38235f; --cm-text: #e2e8f0;
+}
+[data-theme="cyberpunk"] {
+  --cm-primary: #f472b6; --cm-secondary: #06b6d4; --cm-accent: #a855f7;
+  --cm-bg-from: #0a0a0f; --cm-bg-via: #0d0d18; --cm-bg-to: #151520;
+  --cm-surface: #151520; --cm-surface-2: #1f1f2e; --cm-text: #f0f0ff;
+}
+[data-theme="matrix"] {
+  --cm-primary: #00ff41; --cm-secondary: #008f11; --cm-accent: #39ff14;
+  --cm-bg-from: #000a00; --cm-bg-via: #020e02; --cm-bg-to: #001a00;
+  --cm-surface: #001a00; --cm-surface-2: #002600; --cm-text: #00ff41;
+}
+[data-theme="cyan-neon"] {
+  --cm-primary: #06b6d4; --cm-secondary: #0891b2; --cm-accent: #67e8f9;
+  --cm-bg-from: #051520; --cm-bg-via: #061a24; --cm-bg-to: #0a252a;
+  --cm-surface: #0a252a; --cm-surface-2: #0e323a; --cm-text: #e2e8f0;
+}
+[data-theme="emerald-forest"] {
+  --cm-primary: #10b981; --cm-secondary: #059669; --cm-accent: #34d399;
+  --cm-bg-from: #0a1a15; --cm-bg-via: #0a1a15; --cm-bg-to: #14261f;
+  --cm-surface: #14261f; --cm-surface-2: #1a3329; --cm-text: #e2e8f0;
+}
+[data-theme="forest-night"] {
+  --cm-primary: #22c55e; --cm-secondary: #16a34a; --cm-accent: #4ade80;
+  --cm-bg-from: #071208; --cm-bg-via: #08160c; --cm-bg-to: #0f1f12;
+  --cm-surface: #0f1f12; --cm-surface-2: #16291a; --cm-text: #dcfce7;
+}
+[data-theme="amber-glow"] {
+  --cm-primary: #f59e0b; --cm-secondary: #d97706; --cm-accent: #fbbf24;
+  --cm-bg-from: #1a1505; --cm-bg-via: #181305; --cm-bg-to: #332a10;
+  --cm-surface: #332a10; --cm-surface-2: #423815; --cm-text: #e2e8f0;
+}
+[data-theme="rose-pink"] {
+  --cm-primary: #f43f5e; --cm-secondary: #ec4899; --cm-accent: #fb7185;
+  --cm-bg-from: #1a0a10; --cm-bg-via: #170810; --cm-bg-to: #3b1525;
+  --cm-surface: #3b1525; --cm-surface-2: #4d1c30; --cm-text: #e2e8f0;
+}
+[data-theme="sunset"] {
+  --cm-primary: #f97316; --cm-secondary: #ef4444; --cm-accent: #fbbf24;
+  --cm-bg-from: #140a05; --cm-bg-via: #160c05; --cm-bg-to: #2a1508;
+  --cm-surface: #2a1508; --cm-surface-2: #381d0a; --cm-text: #fef3c7;
+}
+[data-theme="sakura"] {
+  --cm-primary: #fb7185; --cm-secondary: #f472b6; --cm-accent: #fda4af;
+  --cm-bg-from: #1a0a12; --cm-bg-via: #180a12; --cm-bg-to: #2d1520;
+  --cm-surface: #2d1520; --cm-surface-2: #3d1c2b; --cm-text: #e2e8f0;
+}
+[data-theme="midnight"] {
+  --cm-primary: #6366f1; --cm-secondary: #4f46e5; --cm-accent: #818cf8;
+  --cm-bg-from: #090912; --cm-bg-via: #0a0a16; --cm-bg-to: #13132b;
+  --cm-surface: #13132b; --cm-surface-2: #1a1a3a; --cm-text: #e2e8f0;
+}
+[data-theme="arctic"] {
+  --cm-primary: #38bdf8; --cm-secondary: #60a5fa; --cm-accent: #93c5fd;
+  --cm-bg-from: #0c1419; --cm-bg-via: #0a1218; --cm-bg-to: #162030;
+  --cm-surface: #162030; --cm-surface-2: #1d2c3f; --cm-text: #f0f9ff;
+}
+
+/* ---- Make the app background respond to the theme ---- */
+body {
+  background: linear-gradient(135deg, var(--cm-bg-from) 0%, var(--cm-bg-via) 50%, var(--cm-bg-to) 100%);
+  color: var(--cm-text);
+  font-family: var(--cm-font);
+  transition: background 400ms ease, color 400ms ease;
+}
+
+/* ---- Theme utility classes (consume the vars) ---- */
+.cm-accent { color: var(--cm-primary); }
+.cm-accent-bg { background-color: var(--cm-primary); }
+.cm-text-muted { color: var(--cm-text-muted); }
+.cm-surface { background-color: var(--cm-surface); }
+.cm-surface-2 { background-color: var(--cm-surface-2); }
+.cm-border { border-color: var(--cm-border); }
+.cm-gradient-primary {
+  background-image: linear-gradient(135deg, var(--cm-primary) 0%, var(--cm-secondary) 100%);
+}
+.cm-gradient-text {
+  background-image: linear-gradient(135deg, var(--cm-primary) 0%, var(--cm-accent) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+.cm-btn-primary {
+  background-image: linear-gradient(135deg, var(--cm-primary) 0%, var(--cm-secondary) 100%);
+  color: #fff;
+  box-shadow: var(--cm-glow) var(--cm-primary);
+  transition: filter 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+.cm-btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.cm-btn-primary:active { transform: translateY(0); }
+.cm-btn-primary:focus-visible {
+  outline: 2px solid var(--cm-accent);
+  outline-offset: 2px;
+}
+.cm-glow-ring {
+  box-shadow: 0 0 0 1px var(--cm-border), var(--cm-glow) var(--cm-primary);
+}
+.cm-active-indicator {
+  background-image: linear-gradient(135deg, var(--cm-primary) 0%, var(--cm-secondary) 100%);
+}
+
+/* ---- Demo mode banner ---- */
+.demo-banner {
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.18) 0%, rgba(217, 119, 6, 0.18) 100%);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.35);
+  backdrop-filter: blur(8px);
+}
+@keyframes demo-banner-enter {
+  from { opacity: 0; transform: translateY(-100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.demo-banner-enter { animation: demo-banner-enter 280ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* ---- Focus-visible polish (global) ---- */
+:focus-visible {
+  outline: 2px solid var(--cm-primary, #38bdf8);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+button:focus-visible, a:focus-visible, [role="button"]:focus-visible {
+  outline: 2px solid var(--cm-primary, #38bdf8);
+  outline-offset: 2px;
+}
+
+/* ---- Chat loading skeleton ---- */
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton-line {
+  background: linear-gradient(90deg, rgba(148,163,184,0.08) 25%, rgba(148,163,184,0.18) 50%, rgba(148,163,184,0.08) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
