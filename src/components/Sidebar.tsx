@@ -96,7 +96,7 @@ export default function Sidebar() {
         {/* New Chat Button */}
         <button
           onClick={handleNewChat}
-          className="group w-full py-2.5 px-4 bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 text-white rounded-xl font-medium transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-primary-600/25 hover:shadow-primary-500/40"
+          className="group w-full py-2.5 px-4 cm-btn-primary rounded-xl font-medium transition-all duration-200 flex items-center justify-center gap-2"
         >
           <svg className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -166,13 +166,13 @@ export default function Sidebar() {
       {/* Search Input */}
       <div className="px-4 pb-2">
         <div className="relative group">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-500 group-focus-within:text-primary-400 transition-colors" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-500 group-focus-within:text-[var(--cm-primary)] transition-colors" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search conversations..."
-            className="w-full pl-9 pr-8 py-2 bg-dark-800/60 border border-dark-700/50 rounded-lg text-xs text-dark-200 placeholder-dark-600 focus:outline-none focus:border-primary-500/50 focus:bg-dark-800/80 transition-all"
+            className="w-full pl-9 pr-8 py-2 bg-dark-800/60 border border-dark-700/50 rounded-lg text-xs text-dark-200 placeholder-dark-600 focus:outline-none focus:border-[var(--cm-primary)] focus:bg-dark-800/80 transition-all"
           />
           {searchQuery && (
             <button
@@ -191,7 +191,7 @@ export default function Sidebar() {
           /* Empty state */
           <div className="text-center py-10 px-4">
             <div className="w-16 h-16 mx-auto mb-4 relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary-500/10 to-purple-500/10 rounded-full blur-lg"></div>
+              <div className="absolute inset-0 cm-gradient-primary opacity-10 rounded-full blur-lg"></div>
               <div className="relative w-16 h-16 rounded-full bg-dark-800/80 border border-dark-700 flex items-center justify-center">
                 <svg className="w-7 h-7 text-dark-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -204,7 +204,7 @@ export default function Sidebar() {
             
             <button
               onClick={handleNewChat}
-              className="text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors inline-flex items-center gap-1"
+              className="text-xs cm-accent hover:opacity-80 font-medium transition-colors inline-flex items-center gap-1"
             >
               Create your first chat →
             </button>
@@ -221,7 +221,7 @@ export default function Sidebar() {
             <p className="text-xs text-dark-600 mb-3">Try a different search term</p>
             <button
               onClick={() => setSearchQuery('')}
-              className="text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
+              className="text-xs cm-accent hover:opacity-80 font-medium transition-colors"
             >
               Clear search
             </button>
@@ -233,7 +233,7 @@ export default function Sidebar() {
             {pinnedConversations.length > 0 && (
               <>
                 <div className="flex items-center gap-2 px-3 py-2 text-[10px] font-bold text-dark-500 uppercase tracking-wider sticky top-0 bg-dark-900/95 backdrop-blur-sm z-10">
-                  <Pin size={10} className="text-primary-400" />
+                  <Pin size={10} className="cm-accent" />
                   Pinned ({pinnedConversations.length})
                 </div>
                 {pinnedConversations.map((conversation, index) => (
@@ -281,7 +281,10 @@ export default function Sidebar() {
       <div className="p-4 border-t border-dark-800/60 bg-dark-900/50">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shadow-md shadow-primary-500/25">
+            <div
+              className="w-7 h-7 rounded-lg cm-gradient-primary flex items-center justify-center text-white text-xs font-bold shadow-md"
+              style={{ boxShadow: '0 4px 12px -4px var(--cm-primary)' }}
+            >
               AI
             </div>
             <div>
@@ -367,7 +370,7 @@ function ConversationItem({
     // Apply regex to the ESCAPED string so user content can never inject HTML.
     return escaped.replace(
       re,
-      '<mark class="bg-primary-500/30 text-primary-300 rounded px-0.5">$1</mark>'
+      '<mark class="rounded px-0.5" style="background: color-mix(in srgb, var(--cm-primary) 30%, transparent); color: var(--cm-primary);">$1</mark>'
     );
   };
 
@@ -379,15 +382,21 @@ function ConversationItem({
         ${isPinned 
           ? 'bg-gradient-to-r from-amber-500/10 to-transparent border border-amber-500/20 hover:border-amber-400/40' 
           : isActive 
-            ? 'bg-gradient-to-r from-primary-600/15 to-primary-500/5 border border-primary-500/30 shadow-sm' 
+            ? 'border shadow-sm' 
             : 'hover:bg-dark-800/60 border border-transparent hover:border-dark-700/30'
         }
       `}
-      style={{ animationDelay: `${index * 50}ms` }}
+      style={{
+        animationDelay: `${index * 50}ms`,
+        ...(isActive && !isPinned ? {
+          backgroundImage: 'linear-gradient(to right, color-mix(in srgb, var(--cm-primary) 15%, transparent), color-mix(in srgb, var(--cm-primary) 5%, transparent))',
+          borderColor: 'color-mix(in srgb, var(--cm-primary) 30%, transparent)',
+        } : {}),
+      }}
     >
       {/* Active/Pinned indicator */}
       {isActive && !isPinned && (
-        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary-500 rounded-r-full"></div>
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 cm-active-indicator rounded-r-full"></div>
       )}
       {isPinned && (
         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-amber-400 rounded-r-full"></div>
@@ -405,11 +414,14 @@ function ConversationItem({
             
             {/* Message count badge */}
             {userMessageCount > 0 && (
-              <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-full ${
-                isActive 
-                  ? 'bg-primary-500/20 text-primary-300' 
-                  : 'bg-dark-700 text-dark-400'
-              }`}>
+              <span
+                className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-full ${
+                  isActive
+                    ? 'cm-accent'
+                    : 'bg-dark-700 text-dark-400'
+                }`}
+                style={isActive ? { backgroundColor: 'color-mix(in srgb, var(--cm-primary) 20%, transparent)' } : undefined}
+              >
                 {userMessageCount}
               </span>
             )}
@@ -417,7 +429,7 @@ function ConversationItem({
           
           {/* Meta info row */}
           <div className="flex items-center gap-2 mb-1.5">
-            <span className={`text-[11px] ${isActive ? 'text-primary-400/80' : 'text-dark-500'}`}>
+            <span className={`text-[11px] ${isActive ? 'cm-accent opacity-80' : 'text-dark-500'}`}>
               {formatDate(conversation.updatedAt)}
             </span>
             
@@ -437,7 +449,7 @@ function ConversationItem({
               isActive ? 'text-dark-400' : 'text-dark-600'
             }`}
             dangerouslySetInnerHTML={{ __html: 
-              (lastMessage.role === 'user' ? '<span class="text-dark-500 mr-1">You:</span>' : '<span class="text-primary-500/60 mr-1">AI:</span>') +
+              (lastMessage.role === 'user' ? '<span class="text-dark-500 mr-1">You:</span>' : '<span class="mr-1" style="color: color-mix(in srgb, var(--cm-primary) 60%, transparent);">AI:</span>') +
               highlightText(messagePreview, searchQuery)
             }}
             />

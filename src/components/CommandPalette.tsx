@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
+import { useTheme } from '../hooks/useTheme';
+import { THEME_PRESETS } from '../lib/themePresets';
 
 // Types
 interface CommandItem {
@@ -27,8 +29,10 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
     toggleFileExplorer,
     toggleSettings,
     toggleModelManager,
+    toggleThemeCustomizer,
     setProjectPath,
   } = useStore();
+  const { setTheme, config } = useTheme();
 
   // Build commands list
   const commands: CommandItem[] = [
@@ -157,10 +161,37 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
     // Settings
     {
       id: 'change-theme',
-      label: 'Change Theme...',
+      label: 'Change Theme... (Open Customizer)',
+      shortcut: 'Ctrl+Shift+T',
       icon: '🎨',
       category: 'settings',
       action: () => {
+        toggleThemeCustomizer();
+        onClose();
+      },
+    },
+    // Per-preset theme quick-switch commands
+    ...THEME_PRESETS.map((preset) => ({
+      id: `theme-${preset.id}`,
+      label: `Theme: ${preset.name}`,
+      icon: config.presetId === preset.id ? '✓ 🎨' : '🎨',
+      category: 'settings' as const,
+      action: () => {
+        setTheme({ presetId: preset.id, font: config.font, radius: config.radius });
+        onClose();
+      },
+    })),
+    {
+      id: 'cycle-theme',
+      label: 'Cycle Theme (next preset)',
+      shortcut: 'Ctrl+Alt+T',
+      icon: '🔄',
+      category: 'settings',
+      action: () => {
+        // Defer to the global handler by dispatching a synthetic keydown.
+        window.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 't', ctrlKey: true, altKey: true, bubbles: true,
+        }));
         onClose();
       },
     },

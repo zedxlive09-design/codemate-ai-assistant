@@ -28,9 +28,10 @@ import OnboardingWizard, { useShouldShowOnboarding } from './components/Onboardi
 import TokenUsageHUD from './components/TokenUsageHUD';
 import FeatureShowcase from './components/FeatureShowcase';
 import DemoModeBanner from './components/DemoModeBanner';
-import { ToastProvider } from './components/Toast';
+import { ToastProvider, useToast } from './components/Toast';
 import { useStore } from './store/useStore';
 import { useTheme } from './hooks/useTheme';
+import { getPresetById } from './lib/themePresets';
 import { useCommandPalette } from './components/CommandPalette';
 import { useKeyboardShortcuts } from './components/KeyboardShortcuts';
 
@@ -102,7 +103,7 @@ export default function App() {
   const showFeatureShowcase = !activeConversation || activeConversation.messages.length === 0;
 
   // Apply + persist the visual theme (CSS --cm-* vars + data-theme attribute).
-  useTheme();
+  const { cycleTheme } = useTheme();
 
   // Voice input transcript handler
   const handleVoiceTranscript = useCallback((text: string) => {
@@ -405,7 +406,7 @@ export default function App() {
                 {isGenerating ? 'Generating...' : 'Ready'}
               </span>
               <span>•</span>
-              <span>Model: <span className="text-cyan-400">Local LLM</span></span>
+              <span>Model: <span className="cm-accent">Local LLM</span></span>
             </div>
             <div className="flex items-center gap-4">
               <span>CPU: <span className="text-amber-400">Auto</span></span>
@@ -549,6 +550,9 @@ export default function App() {
 
         {/* TokenUsageHUD — live generation stats pill (Task 8-b) */}
         <TokenUsageHUD />
+
+        {/* Ctrl+Alt+T theme-cycle shortcut + toast (round 3) */}
+        <ThemeCycleHandler />
       </div>
     </ToastProvider>
   );
@@ -757,4 +761,33 @@ function ProfileIcon() {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
     </svg>
   );
+}
+
+/**
+ * ThemeCycleHandler — registers the Ctrl+Alt+T keyboard shortcut to cycle
+ * forward through theme presets, and shows a toast with the new theme name.
+ * Must live inside <ToastProvider> so it can call useToast(). Renders nothing.
+ */
+function ThemeCycleHandler() {
+  const { cycleTheme } = useTheme();
+  const toast = useToast();
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const isMod = e.ctrlKey || e.metaKey;
+      if (!isMod || !e.altKey) return;
+      if (e.key !== 't' && e.key !== 'T') return;
+      // Only the plain Ctrl+Alt+T (no shift) binding — Ctrl+Alt+Shift+T is
+      // left free so it doesn't collide with other shortcuts.
+      if (e.shiftKey) return;
+      e.preventDefault();
+      const newId = cycleTheme();
+      const meta = getPresetById(newId);
+      toast.info('Theme changed', meta ? meta.name : newId);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [cycleTheme, toast]);
+
+  return null;
 }

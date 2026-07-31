@@ -1,9 +1,37 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import MessageBubble from './MessageBubble';
+// Lazy-load MessageBubble so the heavy markdown stack
+// (react-markdown + react-syntax-highlighter + prismjs + micromark ecosystem,
+// ~766 kB / 268 kB gzip as `vendor-markdown`) is split into an async chunk
+// that is only fetched once a conversation actually has messages to render.
+const MessageBubble = React.lazy(() => import('./MessageBubble'));
 import ChatInput from './ChatInput';
 import WelcomeScreen from './WelcomeScreen';
 import { Brain, Clock, MessageSquare, Sparkles } from 'lucide-react';
+
+/**
+ * Lightweight placeholder shown while the lazy MessageBubble (and its
+ * markdown chunk) is loading. Deliberately avoids importing the markdown
+ * stack — uses only Tailwind + the existing `.skeleton-line` CSS class.
+ * Mirrors the visual rhythm of an AI message bubble: avatar circle + a
+ * couple of shimmering text lines.
+ */
+function MessageBubbleSkeleton() {
+  return (
+    <div className="flex justify-start message-animate">
+      <div className="max-w-[85%] flex items-start gap-3">
+        {/* Avatar circle */}
+        <div className="w-6 h-6 rounded-full cm-gradient-primary shrink-0" />
+        <div className="flex-1 space-y-2 py-1">
+          {/* Two skeleton lines simulating message text */}
+          <div className="skeleton-line h-3 w-64 max-w-full" />
+          <div className="skeleton-line h-3 w-48 max-w-full" />
+          <div className="skeleton-line h-3 w-40 max-w-full" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ChatArea() {
   const {
@@ -40,8 +68,11 @@ export default function ChatArea() {
         <div className="flex items-center gap-3">
           {/* Animated gradient icon background */}
           <div className="relative">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary-500/30 to-purple-500/30 rounded-xl blur-lg opacity-60"></div>
-            <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-primary-600 to-purple-600 flex items-center justify-center shadow-lg shadow-primary-600/25">
+            <div className="absolute inset-0 cm-gradient-primary opacity-30 rounded-xl blur-lg"></div>
+            <div
+              className="relative w-10 h-10 rounded-xl cm-gradient-primary flex items-center justify-center shadow-lg"
+              style={{ boxShadow: '0 8px 24px -8px var(--cm-primary)' }}
+            >
               <MessageSquare className="w-5 h-5 text-white" />
             </div>
           </div>
@@ -102,7 +133,7 @@ export default function ChatArea() {
               {/* Empty state illustration - Animated */}
               <div className="w-24 h-24 mx-auto mb-6 relative">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary-500/30 via-purple-500/20 to-pink-500/30 rounded-full blur-2xl animate-pulse"></div>
-                <div className="absolute inset-4 bg-gradient-to-br from-primary-500/20 to-purple-500/20 rounded-full blur-xl animate-bounce" style={{ animationDuration: '3s' }}></div>
+                <div className="absolute inset-4 cm-gradient-primary opacity-20 rounded-full blur-xl animate-bounce" style={{ animationDuration: '3s' }}></div>
                 <div className="relative w-full h-full rounded-full bg-dark-800/90 border border-dark-700 flex items-center justify-center shadow-2xl">
                   <MessageSquare className="w-10 h-10 text-dark-600" />
                 </div>
@@ -123,7 +154,7 @@ export default function ChatArea() {
                   <button
                     key={suggestion.label}
                     onClick={() => handleStartChat()}
-                    className="group px-4 py-2.5 text-xs bg-dark-800/80 hover:bg-gradient-to-r hover:from-primary-600/30 hover:to-purple-600/30 border border-dark-700 hover:border-primary-500/40 rounded-xl transition-all duration-300 text-dark-400 hover:text-white hover:shadow-lg hover:shadow-primary-500/10 hover:-translate-y-0.5"
+                    className="group px-4 py-2.5 text-xs bg-dark-800/80 hover:bg-[color-mix(in_srgb,var(--cm-primary)_15%,transparent)] border border-dark-700 hover:border-[var(--cm-primary)] rounded-xl transition-all duration-300 text-dark-400 hover:text-white hover:-translate-y-0.5"
                   >
                     <span className="mr-1.5">{suggestion.icon}</span>
                     {suggestion.label}
@@ -134,7 +165,7 @@ export default function ChatArea() {
               {/* Pro tip */}
               <div className="mt-8 p-3 bg-dark-800/50 rounded-lg border border-dark-700/50">
                 <p className="text-[11px] text-dark-500 flex items-center justify-center gap-1.5">
-                  <Sparkles size={12} className="text-primary-400" />
+                  <Sparkles size={12} className="cm-accent" />
                   <span>Pro tip: Open a project folder to enable context-aware responses</span>
                 </p>
               </div>
@@ -149,7 +180,11 @@ export default function ChatArea() {
                 className={`message-animate ${index === 0 ? '' : ''}`}
                 style={{ animationDelay: `${index * 50}ms` }}
               >
-                <MessageBubble message={message} />
+                {/* Per-message keyed Suspense: one loading bubble doesn't block
+                    others, and the markdown chunk only needs to load once. */}
+                <React.Suspense fallback={<MessageBubbleSkeleton />}>
+                  <MessageBubble message={message} />
+                </React.Suspense>
                 
                 {/* Add subtle separator between messages */}
                 {index < (activeConversation.messages.length - 1) && (

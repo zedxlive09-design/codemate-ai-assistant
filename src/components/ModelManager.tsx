@@ -231,7 +231,7 @@ export default function ModelManager({ onClose }: ModelManagerProps) {
           onClick={() => setActiveTab('local')}
           className={`flex-1 py-3 text-sm font-medium transition-colors ${
             activeTab === 'local' 
-              ? 'text-primary-400 border-b-2 border-primary-400' 
+              ? 'cm-accent border-b-2 border-[var(--cm-primary)]' 
               : 'text-dark-500 hover:text-dark-300'
           }`}
         >
@@ -268,7 +268,7 @@ export default function ModelManager({ onClose }: ModelManagerProps) {
               <button
                 onClick={handleSelectModelFile}
                 disabled={loading}
-                className="flex-1 py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 py-3 px-4 cm-btn-primary rounded-xl font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -340,7 +340,7 @@ export default function ModelManager({ onClose }: ModelManagerProps) {
             <div className="mt-6 p-4 bg-dark-800 rounded-lg">
               <h4 className="font-medium text-white mb-3">📥 How to Download Models</h4>
               <ol className="text-sm text-dark-300 space-y-2 list-decimal list-inside">
-                <li>Visit <span className="text-primary-400">Hugging Face</span> or <span className="text-primary-400">ModelScope</span></li>
+                <li>Visit <span className="cm-accent">Hugging Face</span> or <span className="cm-accent">ModelScope</span></li>
                 <li>Search for the model name above</li>
                 <li>Go to "Files and versions" tab</li>
                 <li>Download the Q4_K_M GGUF file</li>
@@ -408,7 +408,7 @@ function ModelCard({
               ? 'bg-green-600 text-white'
               : isLoading
               ? 'bg-dark-700 text-dark-400 animate-pulse'
-              : 'bg-primary-600 hover:bg-primary-700 text-white'
+              : 'cm-btn-primary'
           }`}
         >
           {isSelected ? '✓ Loaded' : isLoading ? 'Loading...' : 'Load'}

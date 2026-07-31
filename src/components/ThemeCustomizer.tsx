@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { useTheme, type ThemeConfig } from '../hooks/useTheme';
+import { useTheme, applyConfig, type ThemeConfig } from '../hooks/useTheme';
 import { Palette, Sparkles, RotateCcw, Eye, Download, Upload, Check, Star, Zap } from 'lucide-react';
 
 interface ColorPreset {
@@ -304,6 +304,23 @@ export default function ThemeCustomizer() {
     setTheme(next);
   };
 
+  // --- Theme preview-on-hover ---
+  // Temporarily apply a preset's vars on hover WITHOUT persisting, so the user
+  // can preview themes live. On mouse leave we restore the persisted config.
+  const previewPreset = (preset: ColorPreset) => {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    root.setAttribute('data-theme', preset.name.toLowerCase().replace(/\s+/g, '-'));
+    // Clear custom overrides so the preset's full palette shows through.
+    root.style.removeProperty('--cm-primary');
+    root.style.removeProperty('--cm-secondary');
+    root.style.removeProperty('--cm-accent');
+  };
+
+  const restoreTheme = () => {
+    applyConfig(config);
+  };
+
   return (
     <div className="theme-customizer-container">
       {/* Header */}
@@ -384,8 +401,13 @@ export default function ThemeCustomizer() {
                   <button
                     key={preset.name}
                     onClick={() => applyPreset(preset, index)}
+                    onMouseEnter={() => previewPreset(preset)}
+                    onMouseLeave={restoreTheme}
+                    onFocus={() => previewPreset(preset)}
+                    onBlur={restoreTheme}
                     className={`preset-card ${selectedPreset === index ? 'selected' : ''}`}
                     style={{ background: preset.gradient }}
+                    title={`Preview ${preset.name} theme`}
                   >
                     <span className="preset-name">{preset.name}</span>
                     {selectedPreset === index && (

@@ -10,6 +10,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { THEME_PRESETS, getPresetAfter, DEFAULT_THEME_ID } from '../lib/themePresets';
 
 export interface ThemeConfig {
   /** Preset id (lowercased preset name, spaces->hyphens) or 'custom'. */
@@ -49,6 +50,8 @@ function applyConfig(cfg: ThemeConfig): void {
   if (cfg.radius) root.style.setProperty('--cm-radius', cfg.radius);
 }
 
+export { applyConfig };
+
 function persistConfig(cfg: ThemeConfig): void {
   if (typeof localStorage === 'undefined') return;
   try {
@@ -84,7 +87,22 @@ export function useTheme() {
     persistConfig(DEFAULT_CONFIG);
   }, []);
 
-  return { config, setTheme, resetTheme };
+  /** Advance to the next preset in the list (wraps around). Returns the new preset id. */
+  const cycleTheme = useCallback((): string => {
+    const currentId = config.presetId || DEFAULT_THEME_ID;
+    const next = getPresetAfter(currentId);
+    const nextConfig: ThemeConfig = {
+      presetId: next.id,
+      font: config.font,
+      radius: config.radius,
+    };
+    setConfig(nextConfig);
+    applyConfig(nextConfig);
+    persistConfig(nextConfig);
+    return next.id;
+  }, [config]);
+
+  return { config, setTheme, resetTheme, cycleTheme, presets: THEME_PRESETS };
 }
 
 export default useTheme;
