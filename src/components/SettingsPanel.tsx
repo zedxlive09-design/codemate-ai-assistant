@@ -13,7 +13,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
       {/* Header */}
       <div className="px-6 py-4 border-b border-dark-800 flex items-center justify-between">
         <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-          <svg className="w-6 h-6 text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-6 h-6 cm-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
@@ -46,7 +46,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
               <select
                 value={settings.language}
                 onChange={(e) => updateSettings({ language: e.target.value as 'en' | 'ur' | 'both' })}
-                className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-primary-500"
+                className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--cm-primary)]"
               >
                 <option value="en">English</option>
                 <option value="ur">اردو</option>
@@ -62,7 +62,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
               <select
                 value={settings.fontSize}
                 onChange={(e) => updateSettings({ fontSize: e.target.value as 'small' | 'medium' | 'large' })}
-                className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-primary-500"
+                className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--cm-primary)]"
               >
                 <option value="small">Small</option>
                 <option value="medium">Medium</option>
@@ -211,7 +211,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
         </button>
         <button
           onClick={onClose}
-          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+          className="px-4 py-2 cm-btn-primary rounded-lg transition-colors"
         >
           Save Changes
         </button>
@@ -245,7 +245,7 @@ function SettingSlider({
           <span className="text-sm font-medium text-white">{label}</span>
           <p className="text-xs text-dark-500">{description}</p>
         </div>
-        <span className="text-sm font-mono text-primary-400 bg-dark-900 px-2 py-1 rounded">
+        <span className="text-sm font-mono cm-accent bg-dark-900 px-2 py-1 rounded">
           {value}
         </span>
       </div>
@@ -256,7 +256,7 @@ function SettingSlider({
         step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-primary-500"
+        className="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-[var(--cm-primary)]"
       />
     </div>
   );
@@ -283,7 +283,7 @@ function ToggleSetting({
       <div
         onClick={() => onChange(!checked)}
         className={`relative w-11 h-6 rounded-full transition-colors ${
-          checked ? 'bg-primary-600' : 'bg-dark-600'
+          checked ? 'cm-accent-bg' : 'bg-dark-600'
         }`}
       >
         <div

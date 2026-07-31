@@ -161,30 +161,30 @@ export default function GitPanel({ isOpen, onClose }: GitPanelProps) {
       <div className="flex items-center gap-1 px-4 py-2 border-b border-dark-800/60 shrink-0">
         <button
           onClick={() => setActiveTab('status')}
-          className={activeTab === 'status' ? "px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-primary-500/20 text-primary-400" : "px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-dark-500 hover:text-dark-300 hover:bg-dark-800/50"}
+          className={activeTab === 'status' ? "px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-[color-mix(in_srgb,var(--cm-primary)_20%,transparent)] cm-accent" : "px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-dark-500 hover:text-dark-300 hover:bg-dark-800/50"}
         >
           Status
-          <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-primary-500/30">
+          <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-[color-mix(in_srgb,var(--cm-primary)_30%,transparent)]">
             {gitStatus.staged + gitStatus.modified}
           </span>
         </button>
         
         <button
           onClick={() => setActiveTab('commits')}
-          className={activeTab === 'commits' ? "px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-primary-500/20 text-primary-400" : "px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-dark-500 hover:text-dark-300 hover:bg-dark-800/50"}
+          className={activeTab === 'commits' ? "px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-[color-mix(in_srgb,var(--cm-primary)_20%,transparent)] cm-accent" : "px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-dark-500 hover:text-dark-300 hover:bg-dark-800/50"}
         >
           Commits
-          <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-primary-500/30">
+          <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-[color-mix(in_srgb,var(--cm-primary)_30%,transparent)]">
             {commits.length}
           </span>
         </button>
         
         <button
           onClick={() => setActiveTab('diff')}
-          className={activeTab === 'diff' ? "px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-primary-500/20 text-primary-400" : "px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-dark-500 hover:text-dark-300 hover:bg-dark-800/50"}
+          className={activeTab === 'diff' ? "px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-[color-mix(in_srgb,var(--cm-primary)_20%,transparent)] cm-accent" : "px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-dark-500 hover:text-dark-300 hover:bg-dark-800/50"}
         >
           Diff
-          <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-primary-500/30">
+          <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-[color-mix(in_srgb,var(--cm-primary)_30%,transparent)]">
             {fileDiffs.length}
           </span>
         </button>
@@ -303,7 +303,7 @@ export default function GitPanel({ isOpen, onClose }: GitPanelProps) {
                 >
                   <div className="flex items-start gap-3">
                     {/* Commit Hash */}
-                    <code className="text-[10px] text-primary-400 font-mono bg-dark-900/50 px-1.5 py-0.5 rounded shrink-0">
+                    <code className="text-[10px] cm-accent font-mono bg-dark-900/50 px-1.5 py-0.5 rounded shrink-0">
                       {commit.hash.slice(0, 7)}
                     </code>
                     

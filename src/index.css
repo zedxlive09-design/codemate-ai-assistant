@@ -4941,3 +4941,68 @@ body, .cm-accent, .cm-accent-bg, .cm-surface, .cm-surface-2,
 .toast-theme-cycle .toast-progress-bar {
   background-image: linear-gradient(90deg, var(--cm-primary), var(--cm-secondary));
 }
+
+/* ── GlobalSearchModal entrance animation (Task 10-b) ─────────────────── */
+@keyframes global-search-enter {
+  from { opacity: 0; transform: scale(0.96) translateY(-8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.global-search-enter { animation: global-search-enter 200ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@media (prefers-reduced-motion: reduce) { .global-search-enter { animation: none; } }
+
+/* ============================================================
+   ROUND 4 POLISH — QuickThemePicker + GlobalSearch + refinements
+   ============================================================ */
+
+@keyframes quick-theme-enter {
+  from { opacity: 0; transform: scale(0.96) translateY(-8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.quick-theme-enter {
+  animation: quick-theme-enter 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .quick-theme-enter { animation: none; }
+}
+
+/* Quick theme picker swatch: the [data-theme] scope on the swatch span makes
+   each preset's --cm-primary/secondary/accent vars apply to its dots, so the
+   grid shows each theme's actual palette without applying it globally. */
+.quick-theme-enter [data-theme] {
+  /* nothing else needed — the inline styles read the scoped vars */
+}
+
+/* Refine the CommandPalette category headers for better scannability */
+.command-category-header {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cm-text-muted, #94a3b8);
+  padding: 8px 12px 4px;
+  position: sticky;
+  top: 0;
+  background: linear-gradient(180deg, rgba(15,23,42,0.95) 70%, transparent);
+  backdrop-filter: blur(4px);
+  z-index: 1;
+}
+
+/* Subtle hover lift for all glass-card panels on hover (interactive affordance) */
+.glass-card {
+  transition: border-color 250ms ease, box-shadow 250ms ease;
+}
+.glass-card:hover {
+  border-color: color-mix(in srgb, var(--cm-primary) 25%, var(--cm-border, rgba(148,163,184,0.18)));
+}
+
+/* Global search result item: match-highlight <mark> refinement */
+.global-search-result mark {
+  background: color-mix(in srgb, var(--cm-primary) 30%, transparent);
+  color: #fff;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.global-search-result.active {
+  background: color-mix(in srgb, var(--cm-primary) 12%, transparent);
+  border-left: 2px solid var(--cm-primary);
+}

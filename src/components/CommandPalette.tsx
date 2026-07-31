@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { useTheme } from '../hooks/useTheme';
-import { THEME_PRESETS } from '../lib/themePresets';
+import { THEME_PRESETS, getPresetById } from '../lib/themePresets';
+import { openGlobalSearch } from './GlobalSearchModal';
+import { openQuickThemePicker } from './QuickThemePicker';
 
 // Types
 interface CommandItem {
@@ -32,7 +34,7 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
     toggleThemeCustomizer,
     setProjectPath,
   } = useStore();
-  const { setTheme, config } = useTheme();
+  const { setTheme, cycleTheme, config } = useTheme();
 
   // Build commands list
   const commands: CommandItem[] = [
@@ -99,7 +101,21 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
       icon: '🔍',
       category: 'file',
       action: () => {
-        toggleFileExplorer();
+        // Repurposed (Task 10-b): this shortcut now opens the global
+        // full-text message search modal rather than just toggling the
+        // file explorer (which the Files toolbar button already does).
+        openGlobalSearch();
+        onClose();
+      },
+    },
+    {
+      id: 'search-messages',
+      label: 'Search Messages (Global)',
+      shortcut: 'Ctrl+Shift+F',
+      icon: '🔎',
+      category: 'chat',
+      action: () => {
+        openGlobalSearch();
         onClose();
       },
     },
@@ -188,10 +204,26 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
       icon: '🔄',
       category: 'settings',
       action: () => {
-        // Defer to the global handler by dispatching a synthetic keydown.
-        window.dispatchEvent(new KeyboardEvent('keydown', {
-          key: 't', ctrlKey: true, altKey: true, bubbles: true,
-        }));
+        const newId = cycleTheme();
+        const meta = getPresetById(newId);
+        // Show a lightweight title flash via the document title (the global
+        // ThemeCycleHandler toast also fires from the keydown shortcut).
+        if (meta) {
+          const orig = document.title;
+          document.title = `Theme: ${meta.name}`;
+          setTimeout(() => { document.title = orig; }, 1200);
+        }
+        onClose();
+      },
+    },
+    {
+      id: 'quick-theme-picker',
+      label: 'Quick Theme Picker...',
+      shortcut: 'Ctrl+Alt+Y',
+      icon: '🎯',
+      category: 'settings',
+      action: () => {
+        openQuickThemePicker();
         onClose();
       },
     },

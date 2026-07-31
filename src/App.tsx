@@ -34,6 +34,8 @@ import { useTheme } from './hooks/useTheme';
 import { getPresetById } from './lib/themePresets';
 import { useCommandPalette } from './components/CommandPalette';
 import { useKeyboardShortcuts } from './components/KeyboardShortcuts';
+import GlobalSearchModal from './components/GlobalSearchModal';
+import QuickThemePicker from './components/QuickThemePicker';
 
 export default function App() {
   const { 
@@ -91,6 +93,8 @@ export default function App() {
   // State for modal panels
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  const [showQuickThemePicker, setShowQuickThemePicker] = useState(false);
   const shouldShowOnboarding = useShouldShowOnboarding(); // Returns boolean from hook
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const showOnboarding = shouldShowOnboarding && !onboardingDismissed;
@@ -254,10 +258,20 @@ export default function App() {
         toggleProfilePanel();
       }
 
-      // Floating Bar
-      if (isMod && e.shiftKey && e.key === 'F') {
+      // Global Search Modal (Ctrl+Shift+F, aliased to Ctrl+Shift+H).
+      // Previously this shortcut toggled the FloatingBar store flag (which the
+      // FloatingBar component doesn't actually consume) — repurposed here to
+      // open the full-text message search modal (Task 10-b).
+      if (isMod && e.shiftKey && (e.key === 'F' || e.key === 'H')) {
         e.preventDefault();
-        toggleFloatingBar();
+        setShowGlobalSearch(true);
+      }
+
+      // Quick Theme Picker (Ctrl+Alt+Y) — fast keyboard-driven theme grid
+      // with live preview (round 4).
+      if (isMod && e.altKey && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault();
+        setShowQuickThemePicker(true);
       }
 
       // Escape key - close panels
@@ -266,17 +280,21 @@ export default function App() {
         if (showShortcuts) setShowShortcuts(false);
         if (showDownloadModal) setShowDownloadModal(false);
         if (showNotificationModal) setShowNotificationModal(false);
+        if (showGlobalSearch) setShowGlobalSearch(false);
+        if (showQuickThemePicker) setShowQuickThemePicker(false);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
-    isPaletteOpen, 
-    showShortcuts, 
+    isPaletteOpen,
+    showShortcuts,
     showDownloadModal,
     showNotificationModal,
-    setIsPaletteOpen, 
+    showGlobalSearch,
+    showQuickThemePicker,
+    setIsPaletteOpen,
     setShowShortcuts,
     toggleSidebar,
     toggleSettings,
@@ -298,6 +316,23 @@ export default function App() {
     toggleStatsPanel,
     toggleProfilePanel
   ]);
+
+  // Listen for the cross-component "open global search" event so the
+  // CommandPalette (or any other caller) can open this modal without
+  // prop-drilling the open-state through the component tree (Task 10-b).
+  useEffect(() => {
+    const handler = () => setShowGlobalSearch(true);
+    window.addEventListener('codemate:open-global-search', handler);
+    return () => window.removeEventListener('codemate:open-global-search', handler);
+  }, []);
+
+  // Listen for the "open quick theme picker" event (round 4) so the
+  // CommandPalette can open the QuickThemePicker without prop-drilling.
+  useEffect(() => {
+    const handler = () => setShowQuickThemePicker(true);
+    window.addEventListener('codemate:open-quick-theme-picker', handler);
+    return () => window.removeEventListener('codemate:open-quick-theme-picker', handler);
+  }, []);
 
   return (
     <ToastProvider>
@@ -526,6 +561,10 @@ export default function App() {
 
         {/* Modals */}
         <CommandPalette isOpen={isPaletteOpen} onClose={() => setIsPaletteOpen(false)} />
+        <GlobalSearchModal isOpen={showGlobalSearch} onClose={() => setShowGlobalSearch(false)} />
+
+        {/* Quick Theme Picker — Ctrl+Alt+Y (round 4) */}
+        <QuickThemePicker isOpen={showQuickThemePicker} onClose={() => setShowQuickThemePicker(false)} />
         <KeyboardShortcuts isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
         
         {/* Model Download Modal */}

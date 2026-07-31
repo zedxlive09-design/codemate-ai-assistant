@@ -189,7 +189,7 @@ export default function ActivityPanel({ isOpen, onClose }: ActivityPanelProps) {
       {/* Quick Stats */}
       <div className="grid grid-cols-2 gap-2 p-3 border-b border-dark-800">
         <div className="bg-dark-800/50 rounded-lg p-2.5 text-center">
-          <div className="text-lg font-bold text-primary-400">{stats.totalConversations}</div>
+          <div className="text-lg font-bold cm-accent">{stats.totalConversations}</div>
           <div className="text-[10px] text-dark-500 uppercase tracking-wider">Chats</div>
         </div>
         <div className="bg-dark-800/50 rounded-lg p-2.5 text-center">
@@ -219,7 +219,7 @@ export default function ActivityPanel({ isOpen, onClose }: ActivityPanelProps) {
             onClick={() => setFilter(key as typeof filter)}
             className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
               filter === key
-                ? 'bg-primary-500/20 text-primary-400'
+                ? 'bg-[color-mix(in_srgb,var(--cm-primary)_20%,transparent)] cm-accent'
                 : 'text-dark-500 hover:text-dark-300 hover:bg-dark-800'
             }`}
           >
