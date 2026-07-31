@@ -56,6 +56,13 @@ export default defineConfig(async () => ({
 
           // Markdown rendering + syntax highlighting, including the
           // (numerous) transitive deps of react-markdown / react-syntax-highlighter.
+          // NOTE: react-syntax-highlighter uses dynamic imports for language
+          // registration, which causes Vite to co-locate its __vitePreload
+          // runtime helper in this chunk. Splitting syntax-highlighting into
+          // its own chunk was attempted (round 7) but didn't reduce the
+          // critical path — the helper is duplicated and both chunks are
+          // module-preloaded. Keeping them together is net-neutral and avoids
+          // the extra HTTP request.
           if (
             pkg === "react-markdown" ||
             pkg === "react-syntax-highlighter" ||

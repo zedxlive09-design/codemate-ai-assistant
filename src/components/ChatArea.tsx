@@ -7,8 +7,9 @@ import { useStore } from '../store/useStore';
 const MessageBubble = React.lazy(() => import('./MessageBubble'));
 import ChatInput from './ChatInput';
 import WelcomeScreen from './WelcomeScreen';
-import { exportConversationToMarkdown, downloadFile } from '../lib/conversationExport';
-import { Brain, Clock, MessageSquare, Sparkles, Download } from 'lucide-react';
+import ConversationStatsPopover from './ConversationStatsPopover';
+import { exportConversationToMarkdown, exportConversationsToJson, downloadFile } from '../lib/conversationExport';
+import { Brain, Clock, MessageSquare, Sparkles, Download, ChevronDown, FileText, FileJson } from 'lucide-react';
 
 /**
  * Lightweight placeholder shown while the lazy MessageBubble (and its
@@ -44,6 +45,8 @@ export default function ChatArea() {
   } = useStore();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
 
@@ -51,6 +54,18 @@ export default function ChatArea() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeConversation?.messages]);
+
+  // Close the export dropdown when clicking outside it.
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [exportMenuOpen]);
 
   // Create new chat if none exists
   const handleStartChat = () => {
@@ -123,25 +138,68 @@ export default function ChatArea() {
             </span>
           </div>
 
-          {/* Export current conversation as Markdown (round 6) */}
+          {/* Stats + Export (round 6-7) */}
           {activeConversation.messages.length > 0 && (
-            <button
-              onClick={async () => {
-                try {
-                  const md = exportConversationToMarkdown(activeConversation);
-                  const safeTitle = activeConversation.title.replace(/[^a-z0-9-_]+/gi, '-').slice(0, 40) || 'conversation';
-                  await downloadFile(md, `${safeTitle}.md`, 'text/markdown');
-                } catch (e) {
-                  console.error('Export failed:', e);
-                }
-              }}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-slate-700/50 bg-slate-800/40 hover:bg-[color-mix(in_srgb,var(--cm-primary)_15%,transparent)] hover:border-[var(--cm-primary)] text-slate-300 hover:text-white transition-all"
-              title="Export this conversation as Markdown"
-              aria-label="Export conversation as Markdown"
-            >
-              <Download size={12} />
-              <span className="hidden sm:inline">Export</span>
-            </button>
+            <>
+              <ConversationStatsPopover conversation={activeConversation} />
+
+              {/* Export dropdown: Markdown + JSON (round 7) */}
+              <div ref={exportMenuRef} className="relative">
+                <button
+                  onClick={() => setExportMenuOpen((v) => !v)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-slate-700/50 bg-slate-800/40 hover:bg-[color-mix(in_srgb,var(--cm-primary)_15%,transparent)] hover:border-[var(--cm-primary)] text-slate-300 hover:text-white transition-all"
+                  title="Export this conversation"
+                  aria-label="Export conversation"
+                  aria-haspopup="menu"
+                  aria-expanded={exportMenuOpen}
+                >
+                  <Download size={12} />
+                  <span className="hidden sm:inline">Export</span>
+                  <ChevronDown size={10} className={`transition-transform ${exportMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {exportMenuOpen && (
+                  <div
+                    role="menu"
+                    className="stats-popover-enter absolute right-0 top-full mt-1 w-44 glass-card rounded-xl border border-slate-700/50 shadow-xl overflow-hidden z-50"
+                  >
+                    <button
+                      onClick={async () => {
+                        setExportMenuOpen(false);
+                        try {
+                          const md = exportConversationToMarkdown(activeConversation);
+                          const safeTitle = activeConversation.title.replace(/[^a-z0-9-_]+/gi, '-').slice(0, 40) || 'conversation';
+                          await downloadFile(md, `${safeTitle}.md`, 'text/markdown');
+                        } catch (e) {
+                          console.error('Export failed:', e);
+                        }
+                      }}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-xs text-slate-300 hover:bg-[color-mix(in_srgb,var(--cm-primary)_15%,transparent)] hover:text-white transition-colors text-left"
+                      role="menuitem"
+                    >
+                      <FileText size={13} className="text-slate-400" />
+                      <span>Markdown (.md)</span>
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setExportMenuOpen(false);
+                        try {
+                          const json = exportConversationsToJson([activeConversation]);
+                          const safeTitle = activeConversation.title.replace(/[^a-z0-9-_]+/gi, '-').slice(0, 40) || 'conversation';
+                          await downloadFile(json, `${safeTitle}.json`, 'application/json');
+                        } catch (e) {
+                          console.error('Export failed:', e);
+                        }
+                      }}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-xs text-slate-300 hover:bg-[color-mix(in_srgb,var(--cm-primary)_15%,transparent)] hover:text-white transition-colors text-left border-t border-slate-700/40"
+                      role="menuitem"
+                    >
+                      <FileJson size={13} className="text-slate-400" />
+                      <span>JSON (.json)</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>

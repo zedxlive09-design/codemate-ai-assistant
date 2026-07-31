@@ -3,7 +3,7 @@ import { useStore } from '../store/useStore';
 import { useTheme } from '../hooks/useTheme';
 import { THEME_PRESETS, getPresetById } from '../lib/themePresets';
 import { openGlobalSearch, openQuickThemePicker, toggleFocusMode, openQuickSwitcher } from '../lib/modalEvents';
-import { exportConversationToMarkdown, downloadFile } from '../lib/conversationExport';
+import { exportConversationToMarkdown, exportConversationsToJson, downloadFile } from '../lib/conversationExport';
 
 // Types
 interface CommandItem {
@@ -35,6 +35,8 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
     setProjectPath,
     conversations,
     activeConversationId,
+    togglePinConversation,
+    pinnedConversationIds,
   } = useStore();
   const { setTheme, cycleTheme, resetTheme, config } = useTheme();
 
@@ -103,6 +105,37 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
         } catch (e) {
           console.error('Export failed:', e);
         }
+      },
+    },
+    {
+      id: 'export-conversation-json',
+      label: 'Export Current Conversation (JSON)',
+      icon: '🗃️',
+      category: 'chat',
+      action: async () => {
+        onClose();
+        const conv = conversations.find((c) => c.id === activeConversationId);
+        if (!conv || conv.messages.length === 0) return;
+        try {
+          const json = exportConversationsToJson([conv]);
+          const safeTitle = conv.title.replace(/[^a-z0-9-_]+/gi, '-').slice(0, 40) || 'conversation';
+          await downloadFile(json, `${safeTitle}.json`, 'application/json');
+        } catch (e) {
+          console.error('Export failed:', e);
+        }
+      },
+    },
+    {
+      id: 'pin-current-conversation',
+      label: pinnedConversationIds.includes(activeConversationId || '')
+        ? 'Unpin Current Conversation'
+        : 'Pin Current Conversation',
+      shortcut: 'Alt+P',
+      icon: '📌',
+      category: 'chat',
+      action: () => {
+        if (activeConversationId) togglePinConversation(activeConversationId);
+        onClose();
       },
     },
     // File

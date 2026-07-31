@@ -93,7 +93,9 @@ export default function App() {
     toggleNotifications,
     toggleStatsPanel,
     toggleProfilePanel,
-    toggleMemoryPanel
+    toggleMemoryPanel,
+    togglePinConversation,
+    pinnedConversationIds
   } = useStore();
 
   const { isOpen: isPaletteOpen, setIsOpen: setIsPaletteOpen } = useCommandPalette();
@@ -447,6 +449,21 @@ export default function App() {
         setShowQuickSwitcher(true);
       }
 
+      // Pin / unpin the active conversation (Alt+P) — round 7.
+      // Plain Alt+P (no Ctrl/Cmd, no Shift) is conflict-free: all other
+      // shortcuts start with isMod. "P" mnemonic = Pin.
+      if (
+        !isMod &&
+        !e.shiftKey &&
+        e.altKey &&
+        (e.key === 'p' || e.key === 'P')
+      ) {
+        if (activeConversationId) {
+          e.preventDefault();
+          togglePinConversation(activeConversationId);
+        }
+      }
+
       // Escape key - close panels.
       // Focus-mode exit takes priority over every other Escape handler so
       // users can always leave distraction-free mode with a single Esc.
@@ -500,6 +517,8 @@ export default function App() {
     toggleProfilePanel,
     toggleFocusMode,
     exitFocusMode,
+    activeConversationId,
+    togglePinConversation,
   ]);
 
   // Listen for the cross-component "toggle focus mode" event so the
