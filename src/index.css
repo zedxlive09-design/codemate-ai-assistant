@@ -5398,3 +5398,28 @@ button[aria-label="Export conversation as Markdown"]:hover {
 .word-freq-bar {
   transition: width 400ms cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* ─── ConversationTemplatesModal (round 11 — Task 17-a) ────────────────────── */
+/* Overlay modal entrance: fade + scale-up + slight lift, matching the
+   WordFrequencyPanel's word-freq-enter timing for visual consistency. */
+@keyframes templates-enter {
+  from { opacity: 0; transform: scale(0.95) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.templates-enter {
+  animation: templates-enter 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .templates-enter { animation: none; }
+}
+
+/* Template card hover lift + themed focus ring. The themed ring colour is
+   applied via inline Tailwind classes in the component (using
+   var(--cm-primary)); this rule just owns the lift transition so it stays
+   smooth across hover/focus/active states. */
+.template-card {
+  transition: all 180ms ease;
+}
+.template-card:hover {
+  transform: translateY(-2px);
+}

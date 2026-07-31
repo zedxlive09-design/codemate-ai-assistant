@@ -16,6 +16,8 @@ export const MODAL_EVENTS = {
   quickThemePicker: 'codemate:open-quick-theme-picker',
   toggleFocusMode: 'codemate:toggle-focus-mode',
   quickSwitcher: 'codemate:open-quick-switcher',
+  templates: 'codemate:open-templates',
+  toggleBulkMode: 'codemate:toggle-bulk-mode',
 } as const;
 
 /** Open the GlobalSearchModal (full-text message search). */
@@ -40,4 +42,24 @@ export function toggleFocusMode(): void {
 export function openQuickSwitcher(): void {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent(MODAL_EVENTS.quickSwitcher));
+}
+
+/**
+ * Open the ConversationTemplatesModal (curated prompt-template picker).
+ * Listened to by ChatArea so the CommandPalette can trigger it without
+ * prop-drilling the open-state down through the tree.
+ */
+export function openTemplates(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(MODAL_EVENTS.templates));
+}
+
+/**
+ * Toggle the Sidebar's bulk-select mode (round 11). Listened to by the
+ * Sidebar so the Alt+B shortcut (registered in App.tsx) + CommandPalette
+ * can toggle it without prop-drilling.
+ */
+export function toggleBulkMode(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(MODAL_EVENTS.toggleBulkMode));
 }

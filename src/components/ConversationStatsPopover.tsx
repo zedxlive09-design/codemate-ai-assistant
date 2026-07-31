@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { BarChart3, X } from 'lucide-react';
+import { BarChart3, BookOpen, X } from 'lucide-react';
 import type { Conversation, Message } from '../types';
 
 interface ConversationStatsPopoverProps {
@@ -145,6 +145,8 @@ export default function ConversationStatsPopover({ conversation }: ConversationS
       longestRole,
       durationMs,
       hasDuration,
+      // Reading-time estimate: ~200 words/minute for English prose.
+      readingTimeMin: totalWords / 200,
     };
   }, [conversation.messages]);
 
@@ -239,6 +241,19 @@ export default function ConversationStatsPopover({ conversation }: ConversationS
               value={stats.longestRole ? `${formatNumber(stats.longestWords)}w` : '—'}
               sub={stats.longestRole ? ROLE_META[stats.longestRole].label : undefined}
             />
+          </div>
+
+          {/* Reading-time estimate (round 11) */}
+          <div className="mt-3 px-3 py-2 rounded-lg bg-[color-mix(in_srgb,var(--cm-primary)_8%,transparent)] border border-[color-mix(in_srgb,var(--cm-primary)_20%,transparent)] flex items-center gap-2">
+            <BookOpen size={14} className="cm-accent shrink-0" />
+            <span className="text-[11px] text-slate-300">Reading time</span>
+            <span className="ml-auto text-[11px] cm-accent font-medium tabular-nums">
+              {stats.readingTimeMin < 1
+                ? `${Math.max(1, Math.round(stats.readingTimeMin * 60))}s`
+                : stats.readingTimeMin < 60
+                  ? `${Math.round(stats.readingTimeMin)}m`
+                  : `${Math.floor(stats.readingTimeMin / 60)}h ${Math.round(stats.readingTimeMin % 60)}m`}
+            </span>
           </div>
 
           {/* Role breakdown bar chart */}

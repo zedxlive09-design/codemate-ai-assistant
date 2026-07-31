@@ -109,6 +109,14 @@ export default function Sidebar() {
     return () => document.removeEventListener('mousedown', handler);
   }, [showTagMgmt]);
 
+  // Listen for the Alt+B "toggle bulk mode" event (round 11) so the global
+  // shortcut + CommandPalette can toggle the Sidebar's bulk-select mode.
+  useEffect(() => {
+    const handler = () => setBulkMode((v) => !v);
+    window.addEventListener('codemate:toggle-bulk-mode', handler);
+    return () => window.removeEventListener('codemate:toggle-bulk-mode', handler);
+  }, []);
+
   // Bulk-select helpers.
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {

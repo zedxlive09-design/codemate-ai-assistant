@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { useTheme } from '../hooks/useTheme';
 import { THEME_PRESETS, getPresetById } from '../lib/themePresets';
-import { openGlobalSearch, openQuickThemePicker, toggleFocusMode, openQuickSwitcher } from '../lib/modalEvents';
+import { openGlobalSearch, openQuickThemePicker, toggleFocusMode, openQuickSwitcher, openTemplates, toggleBulkMode } from '../lib/modalEvents';
 import { exportConversationToMarkdown, exportConversationsToJson, downloadFile } from '../lib/conversationExport';
 
 // Types
@@ -84,6 +84,19 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
       },
     },
     {
+      id: 'open-templates',
+      label: 'Open Prompt Templates',
+      shortcut: '',
+      icon: '📝',
+      category: 'chat',
+      action: () => {
+        // Dispatch the cross-component event; ChatArea listens and opens
+        // its ConversationTemplatesModal (Task 17-a).
+        openTemplates();
+        onClose();
+      },
+    },
+    {
       id: 'copy-last-response',
       label: 'Copy Last Response',
       shortcut: 'Ctrl+Shift+C',
@@ -140,6 +153,17 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
       category: 'chat',
       action: () => {
         if (activeConversationId) togglePinConversation(activeConversationId);
+        onClose();
+      },
+    },
+    {
+      id: 'toggle-bulk-mode',
+      label: 'Toggle Bulk-Select Mode',
+      shortcut: 'Alt+B',
+      icon: '☑️',
+      category: 'chat',
+      action: () => {
+        toggleBulkMode();
         onClose();
       },
     },

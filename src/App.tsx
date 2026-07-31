@@ -499,6 +499,19 @@ export default function App() {
         }
       }
 
+      // Toggle Sidebar bulk-select mode (Alt+B) — round 11.
+      // Dispatches a window event the Sidebar listens for. Plain Alt+B is
+      // conflict-free (only Ctrl+B exists for the sidebar toggle).
+      if (
+        !isMod &&
+        !e.shiftKey &&
+        e.altKey &&
+        (e.key === 'b' || e.key === 'B')
+      ) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('codemate:toggle-bulk-mode'));
+      }
+
       // Archive the active conversation (Alt+A) — Task 15-a.
       // Plain Alt+A (no Ctrl/Cmd, no Shift) is conflict-free: every other
       // binding in this handler starts with isMod. "A" mnemonic = Archive.

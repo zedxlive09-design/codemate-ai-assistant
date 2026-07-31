@@ -9,8 +9,10 @@ import ChatInput from './ChatInput';
 import WelcomeScreen from './WelcomeScreen';
 import ConversationStatsPopover from './ConversationStatsPopover';
 import WordFrequencyPanel from './WordFrequencyPanel';
+import ConversationTemplatesModal from './ConversationTemplatesModal';
 import { exportConversationToMarkdown, exportConversationsToJson, downloadFile } from '../lib/conversationExport';
-import { Brain, Clock, MessageSquare, Sparkles, Download, ChevronDown, FileText, FileJson, Type } from 'lucide-react';
+import { MODAL_EVENTS } from '../lib/modalEvents';
+import { Brain, Clock, MessageSquare, Sparkles, Download, ChevronDown, FileText, FileJson, Type, LayoutTemplate } from 'lucide-react';
 
 /**
  * Lightweight placeholder shown while the lazy MessageBubble (and its
@@ -48,6 +50,7 @@ export default function ChatArea() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [showWordFreq, setShowWordFreq] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
@@ -68,6 +71,15 @@ export default function ChatArea() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [exportMenuOpen]);
+
+  // Listen for the "open templates" event so the CommandPalette (or any other
+  // caller using modalEvents.openTemplates) can open the ConversationTemplatesModal
+  // without prop-drilling the open-state through the component tree.
+  useEffect(() => {
+    const handler = () => setShowTemplates(true);
+    window.addEventListener(MODAL_EVENTS.templates, handler);
+    return () => window.removeEventListener(MODAL_EVENTS.templates, handler);
+  }, []);
 
   // Create new chat if none exists
   const handleStartChat = () => {
@@ -139,6 +151,21 @@ export default function ChatArea() {
               </time>
             </span>
           </div>
+
+          {/* Prompt Templates (round 11 — Task 17-a). Always available when
+              there's an active conversation (even with 0 messages), unlike the
+              Stats/Words/Export actions below which require messages. */}
+          <button
+            type="button"
+            onClick={() => setShowTemplates(true)}
+            aria-haspopup="dialog"
+            aria-label="Open prompt templates"
+            title="Open prompt templates"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-slate-700/50 bg-slate-800/40 hover:bg-[color-mix(in_srgb,var(--cm-primary)_15%,transparent)] hover:border-[var(--cm-primary)] text-slate-300 hover:text-white transition-all"
+          >
+            <LayoutTemplate size={12} />
+            <span className="hidden sm:inline">Templates</span>
+          </button>
 
           {/* Stats + Export (round 6-7) */}
           {activeConversation.messages.length > 0 && (
@@ -303,6 +330,15 @@ export default function ChatArea() {
         conversation={activeConversation}
         isOpen={showWordFreq}
         onClose={() => setShowWordFreq(false)}
+      />
+
+      {/* Prompt Templates overlay (round 11 — Task 17-a). Fixed-positioned;
+          selecting a template copies it to the clipboard for pasting into
+          the ChatInput below. Triggered by the header "Templates" button or
+          by the CommandPalette via the modalEvents bus. */}
+      <ConversationTemplatesModal
+        isOpen={showTemplates}
+        onClose={() => setShowTemplates(false)}
       />
     </div>
   );
