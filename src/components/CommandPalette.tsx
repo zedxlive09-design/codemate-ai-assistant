@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { useTheme } from '../hooks/useTheme';
 import { THEME_PRESETS, getPresetById } from '../lib/themePresets';
-import { openGlobalSearch, openQuickThemePicker, toggleFocusMode } from '../lib/modalEvents';
+import { openGlobalSearch, openQuickThemePicker, toggleFocusMode, openQuickSwitcher } from '../lib/modalEvents';
+import { exportConversationToMarkdown, downloadFile } from '../lib/conversationExport';
 
 // Types
 interface CommandItem {
@@ -32,6 +33,8 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
     toggleModelManager,
     toggleThemeCustomizer,
     setProjectPath,
+    conversations,
+    activeConversationId,
   } = useStore();
   const { setTheme, cycleTheme, resetTheme, config } = useTheme();
 
@@ -61,6 +64,19 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
       },
     },
     {
+      id: 'quick-switch-conversation',
+      label: 'Quick Switch Conversation...',
+      shortcut: 'Alt+Q',
+      icon: '🔀',
+      category: 'chat',
+      action: () => {
+        // Dispatch the cross-component event; App.tsx listens and opens
+        // its lazy-loaded ConversationQuickSwitcher modal (Task 12-b).
+        openQuickSwitcher();
+        onClose();
+      },
+    },
+    {
       id: 'copy-last-response',
       label: 'Copy Last Response',
       shortcut: 'Ctrl+Shift+C',
@@ -69,6 +85,24 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
       action: () => {
         onClose();
         // Implement copy logic
+      },
+    },
+    {
+      id: 'export-conversation-markdown',
+      label: 'Export Current Conversation (Markdown)',
+      icon: '📄',
+      category: 'chat',
+      action: async () => {
+        onClose();
+        const conv = conversations.find((c) => c.id === activeConversationId);
+        if (!conv || conv.messages.length === 0) return;
+        try {
+          const md = exportConversationToMarkdown(conv);
+          const safeTitle = conv.title.replace(/[^a-z0-9-_]+/gi, '-').slice(0, 40) || 'conversation';
+          await downloadFile(md, `${safeTitle}.md`, 'text/markdown');
+        } catch (e) {
+          console.error('Export failed:', e);
+        }
       },
     },
     // File

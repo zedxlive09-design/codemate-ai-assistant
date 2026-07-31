@@ -7,7 +7,8 @@ import { useStore } from '../store/useStore';
 const MessageBubble = React.lazy(() => import('./MessageBubble'));
 import ChatInput from './ChatInput';
 import WelcomeScreen from './WelcomeScreen';
-import { Brain, Clock, MessageSquare, Sparkles } from 'lucide-react';
+import { exportConversationToMarkdown, downloadFile } from '../lib/conversationExport';
+import { Brain, Clock, MessageSquare, Sparkles, Download } from 'lucide-react';
 
 /**
  * Lightweight placeholder shown while the lazy MessageBubble (and its
@@ -121,6 +122,27 @@ export default function ChatArea() {
               </time>
             </span>
           </div>
+
+          {/* Export current conversation as Markdown (round 6) */}
+          {activeConversation.messages.length > 0 && (
+            <button
+              onClick={async () => {
+                try {
+                  const md = exportConversationToMarkdown(activeConversation);
+                  const safeTitle = activeConversation.title.replace(/[^a-z0-9-_]+/gi, '-').slice(0, 40) || 'conversation';
+                  await downloadFile(md, `${safeTitle}.md`, 'text/markdown');
+                } catch (e) {
+                  console.error('Export failed:', e);
+                }
+              }}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-slate-700/50 bg-slate-800/40 hover:bg-[color-mix(in_srgb,var(--cm-primary)_15%,transparent)] hover:border-[var(--cm-primary)] text-slate-300 hover:text-white transition-all"
+              title="Export this conversation as Markdown"
+              aria-label="Export conversation as Markdown"
+            >
+              <Download size={12} />
+              <span className="hidden sm:inline">Export</span>
+            </button>
+          )}
         </div>
       </div>
 

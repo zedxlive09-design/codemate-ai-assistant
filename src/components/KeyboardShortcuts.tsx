@@ -1,83 +1,13 @@
 import React from 'react';
+import { SHORTCUT_CATEGORIES } from '../lib/shortcuts';
 
 interface KeyboardShortcutsModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const shortcutCategories = [
-  {
-    title: 'General',
-    icon: '⭐',
-    shortcuts: [
-      { keys: ['Ctrl', 'K'], description: 'Open Command Palette (also Ctrl+P)' },
-      { keys: ['Ctrl', ','], description: 'Open Settings' },
-      { keys: ['Ctrl', '/'], description: 'Show Keyboard Shortcuts' },
-      { keys: ['Escape'], description: 'Close Dialog / Panel' },
-    ],
-  },
-  {
-    title: 'Chat',
-    icon: '💬',
-    shortcuts: [
-      { keys: ['Enter'], description: 'Send Message' },
-      { keys: ['Shift', 'Enter'], description: 'New Line in Input' },
-    ],
-  },
-  {
-    title: 'Panels',
-    icon: '🪟',
-    shortcuts: [
-      { keys: ['Ctrl', 'B'], description: 'Toggle Sidebar' },
-      { keys: ['Ctrl', 'E'], description: 'Toggle File Explorer' },
-      { keys: ['Ctrl', '`'], description: 'Toggle Terminal' },
-      { keys: ['Ctrl', 'I'], description: 'Toggle Code Editor' },
-      { keys: ['Ctrl', 'M'], description: 'Toggle Model Manager' },
-      { keys: ['Ctrl', 'Shift', 'M'], description: 'Toggle Memory Panel' },
-      { keys: ['Ctrl', 'Shift', 'E'], description: 'Toggle Conversation Manager' },
-      { keys: ['Ctrl', 'Shift', 'S'], description: 'Toggle Snippets Panel' },
-      { keys: ['Ctrl', 'Shift', 'G'], description: 'Toggle Git Panel' },
-      { keys: ['Ctrl', 'Shift', 'B'], description: 'Toggle Bookmarks' },
-      { keys: ['Ctrl', 'Shift', 'A'], description: 'Toggle Activity Panel' },
-    ],
-  },
-  {
-    title: 'Themes',
-    icon: '🎨',
-    shortcuts: [
-      { keys: ['Ctrl', 'Alt', 'T'], description: 'Cycle Theme Preset' },
-      { keys: ['Ctrl', 'Shift', 'T'], description: 'Open Theme Customizer' },
-      { keys: ['Ctrl', 'Alt', 'Y'], description: 'Open Quick Theme Picker' },
-    ],
-  },
-  {
-    title: 'Search',
-    icon: '🔍',
-    shortcuts: [
-      { keys: ['Ctrl', 'Shift', 'F'], description: 'Open Global Search (also Ctrl+Shift+H)' },
-    ],
-  },
-  {
-    title: 'AI & Model',
-    icon: '🧠',
-    shortcuts: [
-      { keys: ['Ctrl', 'Shift', ','], description: 'Open AI Settings' },
-      { keys: ['Ctrl', 'Shift', 'P'], description: 'Open Plugin Manager' },
-      { keys: ['Ctrl', 'Shift', 'D'], description: 'Open Model Downloads' },
-      { keys: ['Ctrl', 'Alt', 'S'], description: 'Open Stats Dashboard' },
-    ],
-  },
-  {
-    title: 'Tools',
-    icon: '🛠️',
-    shortcuts: [
-      { keys: ['Ctrl', 'Alt', 'V'], description: 'Open Voice Input' },
-      { keys: ['Ctrl', 'Shift', 'Q'], description: 'Open Quick Actions' },
-      { keys: ['Ctrl', 'Shift', 'N'], description: 'Open Notifications' },
-      { keys: ['Ctrl', 'Alt', 'P'], description: 'Open Profile' },
-    ],
-  },
-];
+// Single source of truth: src/lib/shortcuts.ts
+const shortcutCategories = SHORTCUT_CATEGORIES;
 
 function Key({ children }: { children: string }) {
   return (

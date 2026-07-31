@@ -42,6 +42,9 @@ import FocusMode from './components/FocusMode';
 // in CommandPalette.tsx (not here) so they don't pull the component code in.
 const LazyGlobalSearchModal = React.lazy(() => import('./components/GlobalSearchModal'));
 const LazyQuickThemePicker = React.lazy(() => import('./components/QuickThemePicker'));
+// Lazy-loaded ConversationQuickSwitcher (Task 12-b) — fast keyboard-driven
+// recent-conversations picker. Code-split so it only loads when first opened.
+const LazyConversationQuickSwitcher = React.lazy(() => import('./components/ConversationQuickSwitcher'));
 
 export default function App() {
   const { 
@@ -101,6 +104,10 @@ export default function App() {
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [showQuickThemePicker, setShowQuickThemePicker] = useState(false);
+  // ConversationQuickSwitcher open-state (Task 12-b). Toggled by the Alt+Q
+  // shortcut below OR by the `codemate:open-quick-switcher` window event
+  // (dispatched from modalEvents.openQuickSwitcher, e.g. by CommandPalette).
+  const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
 
   // Focus Mode (Task 11-b): distraction-free mode that hides sidebar + every
   // side panel + toolbar row + status footer, expanding chat to full width.
@@ -424,6 +431,22 @@ export default function App() {
         toggleFocusMode();
       }
 
+      // Conversation Quick Switcher (Alt+Q) — Task 12-b.
+      // Opens a fast keyboard-driven recent-conversations picker (VS Code
+      // Ctrl+P style). Plain Alt+Q was chosen after auditing every binding
+      // in this handler: ALL existing shortcuts start with `isMod` (Ctrl/Cmd),
+      // so a plain Alt (no Ctrl/Cmd, no Shift) combo is free. The "Q" mnemonic
+      // matches "Quick switcher".
+      if (
+        !isMod &&
+        !e.shiftKey &&
+        e.altKey &&
+        (e.key === 'q' || e.key === 'Q')
+      ) {
+        e.preventDefault();
+        setShowQuickSwitcher(true);
+      }
+
       // Escape key - close panels.
       // Focus-mode exit takes priority over every other Escape handler so
       // users can always leave distraction-free mode with a single Esc.
@@ -439,6 +462,7 @@ export default function App() {
         if (showNotificationModal) setShowNotificationModal(false);
         if (showGlobalSearch) setShowGlobalSearch(false);
         if (showQuickThemePicker) setShowQuickThemePicker(false);
+        if (showQuickSwitcher) setShowQuickSwitcher(false);
       }
     };
 
@@ -451,6 +475,7 @@ export default function App() {
     showNotificationModal,
     showGlobalSearch,
     showQuickThemePicker,
+    showQuickSwitcher,
     focusMode,
     setIsPaletteOpen,
     setShowShortcuts,
@@ -501,6 +526,15 @@ export default function App() {
     const handler = () => setShowQuickThemePicker(true);
     window.addEventListener('codemate:open-quick-theme-picker', handler);
     return () => window.removeEventListener('codemate:open-quick-theme-picker', handler);
+  }, []);
+
+  // Listen for the "open quick switcher" event (Task 12-b) so the
+  // CommandPalette (or any other caller) can open the ConversationQuickSwitcher
+  // without prop-drilling the open-state through the component tree.
+  useEffect(() => {
+    const handler = () => setShowQuickSwitcher(true);
+    window.addEventListener('codemate:open-quick-switcher', handler);
+    return () => window.removeEventListener('codemate:open-quick-switcher', handler);
   }, []);
 
   return (
@@ -761,6 +795,13 @@ export default function App() {
         {showQuickThemePicker && (
           <React.Suspense fallback={null}>
             <LazyQuickThemePicker isOpen={showQuickThemePicker} onClose={() => setShowQuickThemePicker(false)} />
+          </React.Suspense>
+        )}
+
+        {/* Conversation Quick Switcher — Alt+Q (Task 12-b); lazy-loaded */}
+        {showQuickSwitcher && (
+          <React.Suspense fallback={null}>
+            <LazyConversationQuickSwitcher isOpen={showQuickSwitcher} onClose={() => setShowQuickSwitcher(false)} />
           </React.Suspense>
         )}
         <KeyboardShortcuts isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />

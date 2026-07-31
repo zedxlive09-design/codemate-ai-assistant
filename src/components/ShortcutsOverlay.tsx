@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { getAllShortcuts, formatKeys, CATEGORY_TITLES } from '../lib/shortcuts';
 
 interface ShortcutsOverlayProps {
   isOpen: boolean;
@@ -18,52 +19,14 @@ interface Shortcut {
   category: string;
 }
 
-const SHORTCUTS: Shortcut[] = [
-  // General
-  { keys: 'Ctrl + K', description: 'Open Command Palette (also Ctrl + P)', category: 'General' },
-  { keys: 'Ctrl + ,', description: 'Open Settings', category: 'General' },
-  { keys: 'Ctrl + /', description: 'Show Keyboard Shortcuts', category: 'General' },
-  { keys: 'Escape', description: 'Close Dialog / Panel', category: 'General' },
+// Single source of truth: src/lib/shortcuts.ts
+const SHORTCUTS: Shortcut[] = getAllShortcuts().map(s => ({
+  keys: formatKeys(s.keys),
+  description: s.description,
+  category: s.category,
+}));
 
-  // Chat
-  { keys: 'Enter', description: 'Send Message', category: 'Chat' },
-  { keys: 'Shift + Enter', description: 'New Line in Input', category: 'Chat' },
-
-  // Panels
-  { keys: 'Ctrl + B', description: 'Toggle Sidebar', category: 'Panels' },
-  { keys: 'Ctrl + E', description: 'Toggle File Explorer', category: 'Panels' },
-  { keys: 'Ctrl + `', description: 'Toggle Terminal', category: 'Panels' },
-  { keys: 'Ctrl + I', description: 'Toggle Code Editor', category: 'Panels' },
-  { keys: 'Ctrl + M', description: 'Toggle Model Manager', category: 'Panels' },
-  { keys: 'Ctrl + Shift + M', description: 'Toggle Memory Panel', category: 'Panels' },
-  { keys: 'Ctrl + Shift + E', description: 'Toggle Conversation Manager', category: 'Panels' },
-  { keys: 'Ctrl + Shift + S', description: 'Toggle Snippets Panel', category: 'Panels' },
-  { keys: 'Ctrl + Shift + G', description: 'Toggle Git Panel', category: 'Panels' },
-  { keys: 'Ctrl + Shift + B', description: 'Toggle Bookmarks', category: 'Panels' },
-  { keys: 'Ctrl + Shift + A', description: 'Toggle Activity Panel', category: 'Panels' },
-
-  // Themes
-  { keys: 'Ctrl + Alt + T', description: 'Cycle Theme Preset', category: 'Themes' },
-  { keys: 'Ctrl + Shift + T', description: 'Open Theme Customizer', category: 'Themes' },
-  { keys: 'Ctrl + Alt + Y', description: 'Open Quick Theme Picker', category: 'Themes' },
-
-  // Search
-  { keys: 'Ctrl + Shift + F', description: 'Open Global Search (also Ctrl + Shift + H)', category: 'Search' },
-
-  // AI & Model
-  { keys: 'Ctrl + Shift + ,', description: 'Open AI Settings', category: 'AI & Model' },
-  { keys: 'Ctrl + Shift + P', description: 'Open Plugin Manager', category: 'AI & Model' },
-  { keys: 'Ctrl + Shift + D', description: 'Open Model Downloads', category: 'AI & Model' },
-  { keys: 'Ctrl + Alt + S', description: 'Open Stats Dashboard', category: 'AI & Model' },
-
-  // Tools
-  { keys: 'Ctrl + Alt + V', description: 'Open Voice Input', category: 'Tools' },
-  { keys: 'Ctrl + Shift + Q', description: 'Open Quick Actions', category: 'Tools' },
-  { keys: 'Ctrl + Shift + N', description: 'Open Notifications', category: 'Tools' },
-  { keys: 'Ctrl + Alt + P', description: 'Open Profile', category: 'Tools' },
-];
-
-const CATEGORIES = ['General', 'Chat', 'Panels', 'Themes', 'Search', 'AI & Model', 'Tools'];
+const CATEGORIES = CATEGORY_TITLES;
 
 export default function ShortcutsOverlay({ isOpen, onClose }: ShortcutsOverlayProps) {
   const [activeCategory, setActiveCategory] = useState<string>('All');

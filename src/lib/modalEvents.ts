@@ -15,6 +15,7 @@ export const MODAL_EVENTS = {
   globalSearch: 'codemate:open-global-search',
   quickThemePicker: 'codemate:open-quick-theme-picker',
   toggleFocusMode: 'codemate:toggle-focus-mode',
+  quickSwitcher: 'codemate:open-quick-switcher',
 } as const;
 
 /** Open the GlobalSearchModal (full-text message search). */
@@ -33,4 +34,10 @@ export function openQuickThemePicker(): void {
 export function toggleFocusMode(): void {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent(MODAL_EVENTS.toggleFocusMode));
+}
+
+/** Open the ConversationQuickSwitcher (fast recent-conversations picker). */
+export function openQuickSwitcher(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(MODAL_EVENTS.quickSwitcher));
 }
