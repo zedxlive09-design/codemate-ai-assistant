@@ -42,8 +42,8 @@ pub async fn load_model(
 ) -> Result<LoadModelResult, String> {
     log::info!(target: "command", "load_model called: {}", model_path);
     
-    // Validate the model exists in Ollama
-    let result = load_gguf_model(&model_path)?;
+    // Validate the model exists in Ollama (now async)
+    let result = load_gguf_model(&model_path).await?;
     
     if !result.success {
         return Ok(result);
@@ -242,8 +242,8 @@ pub async fn list_models() -> Result<Vec<ModelConfig>, String> {
     let mut all_models = Vec::new();
     let mut seen_paths = std::collections::HashSet::new();
     
-    // Get models from Ollama
-    match scan_directory_for_models(std::path::Path::new("")) {
+    // Get models from Ollama (now async)
+    match scan_directory_for_models(std::path::Path::new("")).await {
         Ok(models) => {
             for model in models {
                 if seen_paths.insert(model.path.clone()) {
@@ -313,8 +313,8 @@ pub async fn validate_model_file(path: String) -> Result<ModelValidationResult, 
         });
     }
     
-    // Treat as Ollama model name
-    match load_gguf_model(&path) {
+    // Treat as Ollama model name (now async)
+    match load_gguf_model(&path).await {
         Ok(result) => Ok(ModelValidationResult {
             valid: result.success,
             error: if result.success { None } else { Some(result.message) },
@@ -336,18 +336,18 @@ pub struct ModelValidationResult {
     pub model_info: Option<ModelInfo>,
 }
 
-/// Check if Ollama is available
+/// Check if Ollama is available (async version)
 #[tauri::command]
-pub fn check_ollama_available() -> Result<OllamaStatus, String> {
-    match check_ollama_status() {
+pub async fn check_ollama_available() -> Result<OllamaStatus, String> {
+    match check_ollama_status().await {
         Ok(()) => {
-            // Get version info using blocking client
-            let client = reqwest::blocking::Client::new();
+            // Get version info using async client
+            let client = reqwest::Client::new();
             let version = client
                 .get(format!("{}/api/version", crate::model::OLLAMA_BASE_URL))
-                .send()
+                .send().await
                 .ok()
-                .and_then(|resp| resp.json::<serde_json::Value>().ok());
+                .and_then(|resp| resp.json::<serde_json::Value>().await.ok());
             
             Ok(OllamaStatus {
                 available: true,
@@ -403,8 +403,8 @@ pub async fn get_inference_system_info() -> Result<InferenceSystemInfo, String> 
     let available_memory_gb = sys.available_memory() as f64 / (1024.0 * 1024.0 * 1024.0);
     let cpu_cores = num_cpus::get();
     
-    // Check Ollama status
-    let ollama_available = check_ollama_status().is_ok();
+    // Check Ollama status (now async)
+    let ollama_available = check_ollama_status().await.is_ok();
     
     Ok(InferenceSystemInfo {
         totalMemoryGb: total_memory_gb,
@@ -419,20 +419,20 @@ pub async fn get_inference_system_info() -> Result<InferenceSystemInfo, String> 
         canRun13b: available_memory_gb > 12.0,
         canRun34b: available_memory_gb > 24.0,
         canRun70b: available_memory_gb > 48.0,
-        ollama_available: ollama_available,
+        ollamaAvailable: ollama_available,
         backend: if ollama_available { "Ollama".to_string() } else { "None".to_string() },
     })
 }
 
-/// Get detailed GPU info (via Ollama's detection)
+/// Get detailed GPU info (via Ollama's detection) (async version)
 #[tauri::command]
-pub fn get_gpu_info() -> Result<GpuInfo, String> {
-    // Try to get GPU info from Ollama using blocking client
-    let client = reqwest::blocking::Client::new();
+pub async fn get_gpu_info() -> Result<GpuInfo, String> {
+    // Try to get GPU info from Ollama using async client
+    let client = reqwest::Client::new();
     
-    match client.get(format!("{}/api/gpu", crate::model::OLLAMA_BASE_URL)).send() {
+    match client.get(format!("{}/api/gpu", crate::model::OLLAMA_BASE_URL)).send().await {
         Ok(resp) if resp.status().is_success() => {
-            match resp.json::<serde_json::Value>() {
+            match resp.json::<serde_json::Value>().await {
                 Ok(info) => {
                     // Parse Ollama GPU info
                     Ok(GpuInfo {
@@ -469,17 +469,26 @@ fn default_gpu_info() -> GpuInfo {
 /// System info for inference capabilities
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct InferenceSystemInfo {
+    #[serde(rename = "totalMemoryGb")]
     pub totalMemoryGb: f64,
+    #[serde(rename = "availableMemoryGb")]
     pub availableMemoryGb: f64,
+    #[serde(rename = "cpuCores")]
     pub cpuCores: usize,
+    #[serde(rename = "cpuName")]
     pub cpuName: String,
+    #[serde(rename = "recommendedMaxParameters")]
     pub recommendedMaxParameters: String,
+    #[serde(rename = "canRun7b")]
     pub canRun7b: bool,
+    #[serde(rename = "canRun13b")]
     pub canRun13b: bool,
+    #[serde(rename = "canRun34b")]
     pub canRun34b: bool,
+    #[serde(rename = "canRun70b")]
     pub canRun70b: bool,
     #[serde(rename = "ollamaAvailable")]
-    pub ollama_available: bool,
+    pub ollamaAvailable: bool,
     pub backend: String,
 }
 
@@ -489,11 +498,13 @@ pub struct GpuInfo {
     pub available: bool,
     pub name: String,
     pub vendor: String,
+    #[serde(rename = "vramGb")]
     pub vramGb: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub driverVersion: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub computeCapability: Option<String>,
+    #[serde(rename = "supportedBackends")]
     pub supportedBackends: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recommendedLayers: Option<u32>,
