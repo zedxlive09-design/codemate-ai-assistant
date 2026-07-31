@@ -84,6 +84,7 @@ export const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     icon: '🔍',
     shortcuts: [
       { keys: ['Ctrl', 'Shift', 'F'], description: 'Open Global Search (also Ctrl+Shift+H)', category: 'Search' },
+      { keys: ['Alt', 'Q'], description: 'Quick Switch Conversation', category: 'Search' },
     ],
   },
   {
