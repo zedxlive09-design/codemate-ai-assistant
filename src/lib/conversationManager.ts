@@ -8,8 +8,7 @@
  * - Auto-organization by project
  */
 
-import { readTextFile, writeTextFile, exists, mkdir } from '@tauri-apps/plugin-fs';
-import { invoke } from '@tauri-apps/api/core';
+import { fileCommands } from './tauri';
 
 // ============================================================
 // TYPES
@@ -94,8 +93,8 @@ export class ConversationManager {
   async initialize(): Promise<void> {
     const dirPath = `${this.projectPath}/${CONVERSATIONS_DIR}`;
     
-    if (!await exists(dirPath)) {
-      await mkdir(dirPath, { recursive: true });
+    if (!await fileCommands.pathExists(dirPath)) {
+      await fileCommands.createDirectory(dirPath);
     }
     
     // Load all conversation indices
@@ -137,11 +136,11 @@ export class ConversationManager {
     try {
       const filePath = `${this.projectPath}/${CONVERSATIONS_DIR}/${id}.json`;
       
-      if (!await exists(filePath)) {
+      if (!await fileCommands.pathExists(filePath)) {
         return null;
       }
       
-      const content = await readTextFile(filePath);
+      const content = await fileCommands.readFile(filePath);
       const data = JSON.parse(content);
       
       return this.parseConversation(data);
@@ -166,7 +165,7 @@ export class ConversationManager {
     const filePath = `${this.projectPath}/${CONVERSATIONS_DIR}/${conversation.id}.json`;
     const serialized = this.serializeConversation(conversation);
     
-    await writeTextFile(filePath, JSON.stringify(serialized, null, 2));
+    await fileCommands.writeFile(filePath, JSON.stringify(serialized, null, 2));
     
     // Update index
     await this.updateIndex(conversation);
@@ -453,9 +452,9 @@ export class ConversationManager {
     try {
       const indexPath = `${this.projectPath}/${CONVERSATIONS_DIR}/index.json`;
       
-      if (!await exists(indexPath)) {
+      if (!await fileCommands.pathExists(indexPath)) {
         // Create empty index
-        await writeTextFile(indexPath, JSON.stringify({
+        await fileCommands.writeFile(indexPath, JSON.stringify({
           version: 1,
           conversations: [],
           lastUpdated: new Date().toISOString(),
@@ -463,7 +462,7 @@ export class ConversationManager {
         return;
       }
       
-      const content = await readTextFile(indexPath);
+      const content = await fileCommands.readFile(indexPath);
       const index = JSON.parse(content);
       
       // Pre-load conversation metadata (not full messages)

@@ -11,8 +11,7 @@
  * - Custom prompt additions
  */
 
-import { readTextFile, exists } from '@tauri-apps/plugin-fs';
-import { invoke } from '@tauri-apps/api/core';
+import { fileCommands, projectCommands } from './tauri';
 import type { SkillDefinition } from './projectMemory';
 
 // ============================================================
@@ -558,19 +557,19 @@ export async function loadCustomSkills(projectPath: string): Promise<SkillDefini
   try {
     const skillsDir = `${projectPath}/.codemate/skills`;
     
-    if (!await exists(skillsDir)) {
+    if (!await fileCommands.pathExists(skillsDir)) {
       return skills;
     }
     
-    const entries = await invoke<Array<{ name: string; isFile: boolean; isDirectory: boolean }>>('list_directory', { 
-      path: skillsDir, 
-      recursive: false 
-    });
+    // Note: projectCommands.listDirectory normalises to ProjectFile[]
+    // (which uses `isDirectory`, not `isFile`). Non-recursive listing
+    // returns the immediate children of the skills directory.
+    const entries = await projectCommands.listDirectory(skillsDir, false);
     
     for (const entry of entries) {
-      if (entry.name.endsWith('.md') && !entry.name.startsWith('.')) {
+      if (!entry.isDirectory && entry.name.endsWith('.md') && !entry.name.startsWith('.')) {
         try {
-          const content = await readTextFile(`${skillsDir}/${entry.name}`);
+          const content = await fileCommands.readFile(`${skillsDir}/${entry.name}`);
           const parsed = parseSkillsFile(content, entry.name);
           skills.push(...parsed.skills);
         } catch (e) {
@@ -592,11 +591,11 @@ export async function loadRootSkillsFile(projectPath: string): Promise<SkillDefi
   try {
     const filePath = `${projectPath}/SKILLS.md`;
     
-    if (!await exists(filePath)) {
+    if (!await fileCommands.pathExists(filePath)) {
       return [];
     }
     
-    const content = await readTextFile(filePath);
+    const content = await fileCommands.readFile(filePath);
     const parsed = parseSkillsFile(content, filePath);
     
     return parsed.skills;

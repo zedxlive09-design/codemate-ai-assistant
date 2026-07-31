@@ -248,67 +248,76 @@ interface ResizableDividerProps {
   className?: string;
 }
 
-function ResizableDivider({ 
-  direction, 
-  onResize, 
+function ResizableDivider({
+  direction,
+  onResize,
   size,
   min = 5,
   max = 95,
-  className = '' 
+  className = ''
 }: ResizableDividerProps) {
   const [isResizing, setIsResizing] = useState(false);
   const startPosRef = useRef(0);
   const startSizeRef = useRef(0);
+  const dividerRef = useRef<HTMLDivElement>(null);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-    startPosRef.current = direction === 'horizontal' ? e.clientX : e.clientY;
-    startSizeRef.current = size;
+  // Register global mouse listeners ONLY while resizing, and clean them up
+  // on mouseup. Uses refs so the move handler always sees fresh values and
+  // avoids the stale-closure bug where `isResizing` was captured as `false`.
+  useEffect(() => {
+    if (!isResizing) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return;
-      
-      const delta = direction === 'horizontal' 
-        ? e.clientX - startPosRef.current 
-        : e.clientY - startPosRef.current;
-      
-      // Use target instead of currentTarget for MouseEvent
-      const targetEl = e.target as HTMLElement;
-      const containerEl = targetEl.parentElement?.parentElement;
+      const delta =
+        direction === 'horizontal'
+          ? e.clientX - startPosRef.current
+          : e.clientY - startPosRef.current;
+
+      // Walk up to the flex container that holds the panels.
+      const containerEl = dividerRef.current?.parentElement;
       if (!containerEl) return;
-      
-      const containerSize = direction === 'horizontal' 
-        ? containerEl.clientWidth 
-        : containerEl.clientHeight;
-      
-      const deltaPercent = (delta / containerSize) * 100;
+
+      const containerSize =
+        direction === 'horizontal'
+          ? containerEl.clientWidth
+          : containerEl.clientHeight;
+
+      const deltaPercent = (delta / Math.max(containerSize, 1)) * 100;
       const newSize = startSizeRef.current + deltaPercent;
-      
+
       if (newSize >= min && newSize <= max) {
         onResize(newSize);
       }
     };
 
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
+    const handleMouseUp = () => setIsResizing(false);
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing, direction, onResize, size, min, max]);
+  }, [isResizing, direction, onResize, min, max]);
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      startPosRef.current =
+        direction === 'horizontal' ? e.clientX : e.clientY;
+      startSizeRef.current = size;
+      setIsResizing(true);
+    },
+    [direction, size]
+  );
 
   return (
     <div
+      ref={dividerRef}
       onMouseDown={handleMouseDown}
       className={`${className} ${
-        direction === 'horizontal' 
-          ? 'w-1 hover:w-2 cursor-col-resize' 
+        direction === 'horizontal'
+          ? 'w-1 hover:w-2 cursor-col-resize'
           : 'h-1.5 hover:h-2 cursor-row-resize'
       } group flex-shrink-0 flex items-center justify-center transition-all duration-150`}
     >

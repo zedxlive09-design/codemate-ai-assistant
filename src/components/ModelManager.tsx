@@ -7,6 +7,16 @@ interface ModelManagerProps {
   onClose: () => void;
 }
 
+// --- Safe numeric formatters (guard against undefined/0 -> NaN) ---
+function formatSizeGB(size: number | undefined): string {
+  if (!size || !Number.isFinite(size) || size <= 0) return 'Unknown';
+  return `${(size / 1024 / 1024 / 1024).toFixed(1)} GB`;
+}
+function formatContextK(contextLength: number | undefined): string {
+  if (!contextLength || !Number.isFinite(contextLength) || contextLength <= 0) return '—';
+  return `${(contextLength / 1000).toFixed(0)}K`;
+}
+
 // Recommended models for offline use
 const RECOMMENDED_MODELS: Omit<ModelConfig, 'path' | 'loaded'>[] = [
   {
@@ -385,7 +395,7 @@ function ModelCard({
             <span>•</span>
             <span>{model.quantization}</span>
             <span>•</span>
-            <span>{(model.size / 1024 / 1024 / 1024).toFixed(1)} GB</span>
+            <span>{formatSizeGB(model.size)}</span>
           </div>
           <p className="text-xs text-dark-500 mt-2 line-clamp-2">{model.description}</p>
         </div>
@@ -441,10 +451,10 @@ function RecommendedModelCard({
               {model.quantization}
             </span>
             <span className="px-2 py-1 bg-dark-700 rounded text-dark-300">
-              {(model.size / 1024 / 1024 / 1024).toFixed(1)} GB
+              {formatSizeGB(model.size)}
             </span>
             <span className="px-2 py-1 bg-dark-700 rounded text-dark-300">
-              Context: {(model.contextLength / 1000).toFixed(0)}K
+              Context: {formatContextK(model.contextLength)}
             </span>
           </div>
         </div>

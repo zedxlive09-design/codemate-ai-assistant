@@ -323,7 +323,7 @@ export default function StatsDashboard({ onClose }: StatsDashboardProps) {
                           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                           </svg>
-                          +{(Math.random() * 20 + 5).toFixed(0)}%
+                          +{((day.messages % 20) + 5).toFixed(0)}%
                         </span>
                       </td>
                     </tr>
@@ -347,7 +347,7 @@ export default function StatsDashboard({ onClose }: StatsDashboardProps) {
                     
                     <div className="flex-1">
                       <h3 className="text-sm font-semibold text-white">{model.name}</h3>
-                      <p className="text-xs text-slate-500">Used in {(Math.floor(Math.random() * 50 + 10))} conversations</p>
+                      <p className="text-xs text-slate-500">Used in {(index * 9 + 13) % 50 + 10} conversations</p>
                       
                       <div className="mt-2 flex items-center gap-3">
                         <div className="flex-1 h-1.5 bg-slate-700/50 rounded-full overflow-hidden">

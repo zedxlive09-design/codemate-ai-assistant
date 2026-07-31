@@ -10,8 +10,7 @@
  * - .codemate/memory/: Learned context about the project
  */
 
-import { invoke } from '@tauri-apps/api/core';
-import { readTextFile, exists, mkdir } from '@tauri-apps/plugin-fs';
+import { fileCommands } from './tauri';
 
 // ============================================================
 // TYPES
@@ -153,7 +152,7 @@ List your main technologies here:
 export async function codeMateExists(projectPath: string): Promise<boolean> {
   try {
     const filePath = `${projectPath}/CODEMATE.md`;
-    return await exists(filePath);
+    return await fileCommands.pathExists(filePath);
   } catch {
     return false;
   }
@@ -166,11 +165,11 @@ export async function readCodeMateFile(projectPath: string): Promise<CodeMateIns
   try {
     const filePath = `${projectPath}/CODEMATE.md`;
     
-    if (!await exists(filePath)) {
+    if (!await fileCommands.pathExists(filePath)) {
       return null;
     }
     
-    const content = await readTextFile(filePath);
+    const content = await fileCommands.readFile(filePath);
     
     return {
       rawContent: content,
@@ -264,17 +263,18 @@ export async function createDefaultCodeMate(projectPath: string): Promise<string
   try {
     // Ensure .codemate directory exists
     const codemateDir = `${projectPath}/.codemate`;
-    if (!await exists(codemateDir)) {
-      await mkdir(codemateDir, { recursive: true });
+    if (!await fileCommands.pathExists(codemateDir)) {
+      await fileCommands.createDirectory(codemateDir);
     }
     
     const filePath = `${projectPath}/CODEMATE.md`;
     
-    // Use Tauri's write API through invoke
-    await invoke('write_file', { 
-      path: filePath, 
-      content: DEFAULT_CODEMATE_CONTENT 
-    });
+    // Write the default CODEMATE.md via the file bridge. In Tauri mode this
+    // uses `@tauri-apps/plugin-fs` `writeTextFile`; in browser mode it is
+    // dispatched to the in-memory mock FS. (Replaces the previous
+    // `invoke('write_file', ...)` phantom-command call which was never
+    // registered in the Rust `invoke_handler` and therefore always failed.)
+    await fileCommands.writeFile(filePath, DEFAULT_CODEMATE_CONTENT);
     
     return filePath;
   } catch (error) {

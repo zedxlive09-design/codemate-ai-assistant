@@ -11,7 +11,7 @@ use tauri::{AppHandle, Emitter, State};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use crate::model::{
-    ModelState, InferenceSettings, LoadModelResult, ModelConfig, 
+    ModelState, InferenceSettings, LoadModelResult, ModelConfig,
     ModelInfo,
     load_gguf_model, create_loaded_model,
     generate_text_async, generate_text_streaming,
@@ -19,6 +19,7 @@ use crate::model::{
     check_ollama_status, pull_model,
     extract_model_name, extract_parameters, extract_quantization
 };
+use crate::commands::project::canonicalize_safe;
 
 // ============================================================================
 // EVENT CONSTANTS
@@ -57,8 +58,14 @@ pub async fn load_model(
         }
     };
     
-    // Create loaded model instance
-    let info = model_info.as_ref().unwrap();
+    // Create loaded model instance.
+    //
+    // `load_gguf_model` and the fallback above always populate
+    // `model_info: Some(...)`, but a single future refactor could break
+    // that invariant — fail with a clear error rather than panicking.
+    let Some(info) = model_info.as_ref() else {
+        return Err("Internal error: model_info missing after load".to_string());
+    };
     
     match create_loaded_model(&model_path, info.context_length) {
         Ok(loaded_model) => {
@@ -301,9 +308,21 @@ pub async fn validate_model_file(path: String) -> Result<ModelValidationResult, 
     
     // Check if this is an Ollama model name or file path
     if path.contains('/') || path.contains('\\') || path.ends_with(".gguf") {
-        // It's a file path
-        let file_path = std::path::PathBuf::from(&path);
-        
+        // It's a file path — canonicalize to reject `..` traversal (H7).
+        // If canonicalization fails (file does not exist / unreadable),
+        // surface a validation failure rather than an invoke error so the
+        // frontend can render the error in the model picker UI.
+        let file_path = match canonicalize_safe(&path) {
+            Ok(p) => p,
+            Err(e) => {
+                return Ok(ModelValidationResult {
+                    valid: false,
+                    error: Some(e),
+                    model_info: None,
+                });
+            }
+        };
+
         if !file_path.exists() {
             return Ok(ModelValidationResult {
                 valid: false,
@@ -311,7 +330,7 @@ pub async fn validate_model_file(path: String) -> Result<ModelValidationResult, 
                 model_info: None,
             });
         }
-        
+
         return Ok(ModelValidationResult {
             valid: true,
             error: None,
@@ -319,7 +338,7 @@ pub async fn validate_model_file(path: String) -> Result<ModelValidationResult, 
                 name: extract_model_name(&path),
                 parameters: extract_parameters(&path).unwrap_or_else(|| "Unknown".to_string()),
                 context_length: 4096,
-                size_bytes: std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0),
+                size_bytes: std::fs::metadata(&file_path).map(|m| m.len()).unwrap_or(0),
                 quantization: extract_quantization(&path),
             }),
         });
@@ -341,7 +360,12 @@ pub async fn validate_model_file(path: String) -> Result<ModelValidationResult, 
 }
 
 /// Result of model validation
+///
+/// `rename_all = "camelCase"` makes `model_info` serialize as `modelInfo`
+/// to match `ModelValidationResult` in `src/lib/tauri.ts`. `default`
+/// allows partial objects to deserialize without error.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct ModelValidationResult {
     pub valid: bool,
     pub error: Option<String>,

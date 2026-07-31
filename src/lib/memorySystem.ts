@@ -10,7 +10,7 @@
  * It provides a unified API for accessing all project context.
  */
 
-import { exists, mkdir } from '@tauri-apps/plugin-fs';
+import { fileCommands } from './tauri';
 import type {
   ProjectContext,
   CodeMateInstructions,
@@ -93,11 +93,11 @@ export class MemorySystem {
       // Ensure .codemate directory structure exists
       const codemateDir = `${this.projectPath}/.codemate`;
       
-      if (!await exists(codemateDir)) {
-        await mkdir(codemateDir, { recursive: true });
-        await mkdir(`${codemateDir}/skills`, { recursive: true });
-        await mkdir(`${codemateDir}/memory`, { recursive: true });
-        await mkdir(`${codemateDir}/agents`, { recursive: true });
+      if (!await fileCommands.pathExists(codemateDir)) {
+        await fileCommands.createDirectory(codemateDir);
+        await fileCommands.createDirectory(`${codemateDir}/skills`);
+        await fileCommands.createDirectory(`${codemateDir}/memory`);
+        await fileCommands.createDirectory(`${codemateDir}/agents`);
       }
       
       // Initialize auto-memory system

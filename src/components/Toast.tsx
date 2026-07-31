@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { createRoot, Root } from 'react-dom/client';
 
 // Types
 export interface Toast {
@@ -68,8 +67,6 @@ function ToastIcon({ type }: { type: Toast['type'] }) {
   };
 
   return icons[type] as React.ReactNode;
-
-  return icons[type];
 }
 
 const colorStyles = {
@@ -102,7 +99,7 @@ const colorStyles = {
     progress: 'bg-gradient-to-r from-blue-400 to-blue-600',
   },
   loading: {
-    bg: 'primary-500/10',
+    bg: 'bg-primary-500/10',
     border: 'border-primary-500/30',
     icon: 'text-primary-400 animate-spin',
     text: 'text-primary-200',
@@ -111,20 +108,28 @@ const colorStyles = {
 };
 
 // Single Toast Component
-function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
+function ToastItem({
+  toast,
+  removeToast,
+}: {
+  toast: Toast;
+  removeToast: (id: string) => void;
+}) {
   const [isExiting, setIsExiting] = useState(false);
   const colors = colorStyles[toast.type];
   const duration = toast.duration ?? 5000;
+  const toastId = toast.id;
 
+  // Depend only on stable/scalar values so timers don't reset on parent re-render.
   React.useEffect(() => {
     const exitTimer = setTimeout(() => setIsExiting(true), duration - 300);
-    const removeTimer = setTimeout(onClose, duration);
+    const removeTimer = setTimeout(() => removeToast(toastId), duration);
 
     return () => {
       clearTimeout(exitTimer);
       clearTimeout(removeTimer);
     };
-  }, [duration, onClose]);
+  }, [duration, toastId, removeToast]);
 
   return (
     <div
@@ -166,7 +171,7 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
       <button
         onClick={() => {
           setIsExiting(true);
-          setTimeout(onClose, 300);
+          setTimeout(() => removeToast(toastId), 300);
         }}
         className="shrink-0 p-1 -mr-1 -mt-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-dark-700/50"
       >
@@ -186,7 +191,7 @@ function ToastContainer({ toasts, removeToast }: { toasts: Toast[]; removeToast:
     <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-3 pointer-events-none">
       {toasts.map((toast) => (
         <div key={toast.id} className="pointer-events-auto slide-down">
-          <ToastItem toast={toast} onClose={() => removeToast(toast.id)} />
+          <ToastItem toast={toast} removeToast={removeToast} />
         </div>
       ))}
     </div>

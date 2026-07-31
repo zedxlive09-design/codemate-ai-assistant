@@ -106,7 +106,7 @@ export function useStreamingGeneration(
             ...prev,
             currentText: event.text,
             tokensGenerated: event.tokensGenerated,
-            tokensPerSecond: event.tokensPerSecond,
+            tokensPerSecond: event.tokensPerSecond || 0,
           }));
 
           if (event.token && options.onToken) {
@@ -124,12 +124,12 @@ export function useStreamingGeneration(
             isGenerating: false,
             currentText: event.text,
             tokensGenerated: event.tokensGenerated,
-            tokensPerSecond: event.tokensPerSecond,
+            tokensPerSecond: event.tokensPerSecond || 0,
           }));
 
           options.onComplete?.(event.text, {
             tokensGenerated: event.tokensGenerated,
-            tokensPerSecond: event.tokensPerSecond,
+            tokensPerSecond: event.tokensPerSecond || 0,
           });
 
           resolvePromise?.(event.text);
@@ -165,6 +165,14 @@ export function useStreamingGeneration(
 
         options.onError?.(errorMessage);
         return '';
+      } finally {
+        // Clean up THIS generation's listeners so they don't accumulate
+        // across repeated generate() calls (only the unmount cleanup ran before).
+        const toRemove = [...unlistenRefs.current];
+        unlistenRefs.current = [];
+        for (const unlisten of toRemove) {
+          try { await unlisten(); } catch { /* ignore */ }
+        }
       }
 
       return resultPromise;

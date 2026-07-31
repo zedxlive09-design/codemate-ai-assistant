@@ -1,15 +1,24 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { useToast } from './Toast';
-import { 
-  detectSystemSpecs, 
-  getModelRecommendations, 
-  formatMemory, 
+import {
+  detectSystemSpecs,
+  getModelRecommendations,
+  formatMemory,
   getPerformanceColor,
   getPerformanceIcon,
   SystemSpecs,
-  ModelRecommendation 
+  ModelRecommendation
 } from '../lib/systemSpecs';
+import { isTauri } from '../lib/isTauri';
+import { fileCommands } from '../lib/tauri';
+// Binary file write + path helpers are only used inside `if (isTauri)`
+// branches below. They are statically imported (matching the pattern in
+// `src/lib/tauri.ts`) because the dynamic `await import(...)` pattern is
+// unnecessary and the functions only throw when CALLED outside Tauri,
+// not at import time.
+import { writeFile as writeBinaryFile } from '@tauri-apps/plugin-fs';
+import { join, appDataDir as getAppDataDir } from '@tauri-apps/api/path';
 
 interface ModelDownload {
   id: string;
@@ -328,7 +337,7 @@ export default function ModelDownloadManager({ isOpen, onClose, onSelectModel }:
 
     try {
       // Try real download first (in Tauri environment)
-      if (window.__TAURI__) {
+      if (isTauri) {
         await performRealDownload(model);
       } else {
         // Fallback to simulated download for web/demo
@@ -418,18 +427,20 @@ export default function ModelDownloadManager({ isOpen, onClose, onSelectModel }:
         position += chunk.length;
       }
 
-      // In Tauri, save to file system
-      if (window.__TAURI__) {
-        const { writeFile, mkdir } = await import('@tauri-apps/plugin-fs');
-        const { join, appDataDir: getAppDataDir } = await import('@tauri-apps/api/path');
-        
+      // In Tauri, save to file system. `isTauri` is true here because
+      // `performRealDownload` is only invoked from the `isTauri` branch
+      // above; the static imports of `writeBinaryFile` / `join` /
+      // `getAppDataDir` are safe because they are only CALLED inside
+      // this block. `fileCommands.createDirectory` dispatches through the
+      // `tauri.ts` bridge and uses `@tauri-apps/plugin-fs` `mkdir` here.
+      if (isTauri) {
         const appDataDirPath = await getAppDataDir();
         const modelsDir = await join(appDataDirPath, 'models');
-        await mkdir(modelsDir, { recursive: true });
-        
+        await fileCommands.createDirectory(modelsDir);
+
         const filePath = await join(modelsDir, `${model.id}.gguf`);
-        await writeFile(filePath, allChunks);
-        
+        await writeBinaryFile(filePath, allChunks);
+
         showToast(`${model.name} saved to ${filePath}`, 'success');
       }
 

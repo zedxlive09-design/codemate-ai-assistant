@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { useStore } from '../store/useStore';
-import { fileCommands, modelCommands } from '../lib/tauri';
+import { fileCommands, modelCommands, modelEvents } from '../lib/tauri';
 import type { InferenceSettings } from '../types';
 import { Sparkles, Code, Bug, Zap, BookOpen, Lightbulb, ChevronRight } from 'lucide-react';
 
@@ -284,39 +284,30 @@ This is a **demo response** - I'm simulating what the AI would say.
     signal: AbortSignal
   ) => {
     let currentText = '';
-    
-    // Import event listeners dynamically to avoid issues
-    const { listen } = await import('@tauri-apps/api/event');
-    
-    // Set up event listeners for streaming tokens
-    const unlistenToken = await listen<{ token: string | null; text: string; tokensGenerated: number; tokensPerSecond: number }>(
-      'model:generation-token',
-      (event) => {
-        if (signal.aborted) return;
-        
-        currentText = event.payload.text;
-        updateMessage(conversationId, messageId, currentText);
-      }
-    );
+    let generationError: string | null = null;
 
-    const unlistenComplete = await listen<{ text: string; tokensGenerated: number; tokensPerSecond: number }>(
-      'model:generation-complete',
-      (event) => {
-        if (signal.aborted) return;
-        
-        currentText = event.payload.text;
-        updateMessage(conversationId, messageId, currentText);
-        
-        console.log(`Generation complete: ${event.payload.tokensGenerated} tokens at ${event.payload.tokensPerSecond.toFixed(1)} t/s`);
-      }
-    );
+    // Use the typed event wrappers from lib/tauri — they dispatch to the mock
+    // event bus in browser mode and to Tauri's listen() in desktop mode.
+    const unlistenToken = await modelEvents.onGenerationToken((event) => {
+      if (signal.aborted) return;
+      currentText = event.text;
+      updateMessage(conversationId, messageId, currentText);
+    });
 
-    const unlistenError = await listen<{ message: string }>(
-      'model:generation-error',
-      (event) => {
-        throw new Error(event.payload.message);
-      }
-    );
+    const unlistenComplete = await modelEvents.onGenerationComplete((event) => {
+      if (signal.aborted) return;
+      currentText = event.text;
+      updateMessage(conversationId, messageId, currentText);
+      console.log(
+        `Generation complete: ${event.tokensGenerated} tokens at ${(event.tokensPerSecond || 0).toFixed(1)} t/s`
+      );
+    });
+
+    const unlistenError = await modelEvents.onGenerationError((event) => {
+      // Don't throw inside the listener (that becomes an unhandled rejection);
+      // capture and re-throw after the await so the caller's try/catch runs.
+      generationError = event.message;
+    });
 
     try {
       // Build inference settings from store
@@ -331,13 +322,14 @@ This is a **demo response** - I'm simulating what the AI would say.
 
       // Call the streaming generation command
       await modelCommands.generateStreaming(prompt, settings);
-      
     } finally {
-      // Clean up all listeners
+      // Clean up all listeners (fire-and-forget; they return Promises).
       unlistenToken();
       unlistenComplete();
       unlistenError();
     }
+
+    if (generationError) throw new Error(generationError);
   };
 
   // Handle keyboard shortcuts

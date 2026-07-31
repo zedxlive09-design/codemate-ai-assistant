@@ -48,16 +48,18 @@ impl LoadedModel {
     }
     
     /// Get model info as a display string
+    #[allow(dead_code)] // Reserved for future debug/diagnostics UI; not currently called by commands.
     pub fn info(&self) -> String {
         format!("{} ({}) - Context: {}", self.name, self.parameters, self.context_length)
     }
-    
+
     /// Check if model is ready for use
     pub fn is_real(&self) -> bool {
         self.is_ready
     }
-    
+
     /// Get context length
+    #[allow(dead_code)] // Callers currently read `model.context_length` directly; kept as a future-proof accessor.
     pub fn get_context_length(&self) -> u32 {
         self.context_length
     }
@@ -68,7 +70,15 @@ impl LoadedModel {
 // ============================================================================
 
 /// Settings for text generation/inference
+///
+/// Wire format is camelCase to match the TypeScript `InferenceSettings`
+/// interface in `src/types/index.ts` (`topP`, `topK`, `maxTokens`,
+/// `repeatPenalty`, `threads`, `gpuLayers`). Unknown fields sent by the
+/// frontend (e.g. `threads`, `gpuLayers` which Ollama does not consume)
+/// are silently ignored by serde, and missing fields fall back to their
+/// `Default` value, so a partial object never breaks deserialization.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
 pub struct InferenceSettings {
     pub temperature: f64,
     pub top_p: f64,
@@ -122,7 +132,12 @@ impl InferenceSettings {
 }
 
 /// Result of loading a model
+///
+/// `rename_all = "camelCase"` makes `model_info` serialize as `modelInfo`
+/// to match `LoadModelResult` in `src/lib/tauri.ts`. `default` lets the
+/// frontend send a partial object without breaking deserialization.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct LoadModelResult {
     pub success: bool,
     pub message: String,
@@ -130,7 +145,11 @@ pub struct LoadModelResult {
 }
 
 /// Information about a model
+///
+/// Wire format is camelCase (`contextLength`, `sizeBytes`) to match
+/// `ModelInfo` in `src/lib/tauri.ts`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct ModelInfo {
     pub name: String,
     pub parameters: String,
@@ -140,13 +159,23 @@ pub struct ModelInfo {
 }
 
 /// Configuration for a model (used in UI)
+///
+/// Wire format is camelCase. Two fields are renamed explicitly to match
+/// `ModelConfig` in `src/types/index.ts`:
+///   - `size_bytes`     → serialized as `size`         (NOT `sizeBytes`)
+///   - `quantization_type` → serialized as `quantization` (NOT `quantizationType`)
+/// `default` lets the frontend send a partial object without breaking
+/// deserialization.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct ModelConfig {
     pub id: String,
     pub name: String,
     pub filename: String,
     pub path: String,
+    #[serde(rename = "size")]
     pub size_bytes: u64,
+    #[serde(rename = "quantization")]
     pub quantization_type: String,
     pub context_length: u32,
     pub parameters: String,
@@ -463,54 +492,70 @@ pub async fn generate_text_streaming(
                 return Err(format!("Ollama API error {}: {}", status, body));
             }
             
-            // Process streaming chunks
+            // Process streaming chunks.
+            //
+            // Ollama sends newline-delimited JSON objects (one per line).
+            // `bytes_stream()` yields arbitrary byte chunks that do NOT
+            // align with line boundaries — a single JSON object can be
+            // split across two chunks, or a single chunk can contain
+            // several JSON objects. To parse correctly we maintain a
+            // `buf` String across chunks: append each incoming chunk,
+            // split on `\n`, parse complete lines, keep the trailing
+            // partial line for the next iteration. (Fixes H8: silent
+            // token loss at chunk boundaries.)
             let mut stream = response.bytes_stream();
-            
+            let mut buf = String::new();
+
             while let Some(chunk_result) = stream.next().await {
                 match chunk_result {
                     Ok(bytes) => {
-                        let bytes_vec = bytes.to_vec();
-                        let text = String::from_utf8_lossy(&bytes_vec);
-                        
-                        // Parse each line as JSON (Ollama sends one JSON per line)
-                        for line in text.lines() {
-                            if line.trim().is_empty() { continue; }
-                            
+                        buf.push_str(&String::from_utf8_lossy(&bytes));
+
+                        // Parse every complete line currently in the buffer.
+                        while let Some(idx) = buf.find('\n') {
+                            let line: String = buf.drain(..=idx).collect();
+                            let line = line.trim();
+                            if line.is_empty() { continue; }
+
                             if let Ok(chunk_data) = serde_json::from_str::<OllamaStreamResponse>(line) {
                                 if let Some(error) = chunk_data.error {
                                     on_token(GenerationProgress::error(&error));
                                     return Err(format!("Ollama error: {}", error));
                                 }
-                                
+
                                 if let Some(token) = chunk_data.response {
                                     token_count += 1;
                                     generated_text.push_str(&token);
-                                    
+
                                     let elapsed = start_time.elapsed();
                                     let speed = token_count as f64 / elapsed.as_secs_f64().max(0.001);
-                                    
+
                                     on_token(GenerationProgress::token(
                                         token.clone(),
                                         token_count,
                                         speed,
                                     ));
                                 }
-                                
+
                                 if chunk_data.done {
                                     let elapsed = start_time.elapsed();
                                     let final_speed = token_count as f64 / elapsed.as_secs_f64().max(0.001);
-                                    
+
                                     on_token(GenerationProgress::complete(
                                         token_count,
                                         &generated_text,
                                         final_speed,
                                     ));
-                                    
-                                    log::info!(target: "inference", "Streaming complete: {} tokens in {:.2}s", 
+
+                                    log::info!(target: "inference", "Streaming complete: {} tokens in {:.2}s",
                                               token_count, elapsed.as_secs_f64());
-                                    
+
                                     return Ok(generated_text);
                                 }
+                            } else {
+                                // Malformed JSON line — log and continue rather
+                                // than silently dropping subsequent tokens.
+                                log::warn!(target: "inference", "Failed to parse stream line: {}", line);
                             }
                         }
                     }
@@ -519,12 +564,39 @@ pub async fn generate_text_streaming(
                     }
                 }
             }
-            
+
+            // Drain any trailing partial line left in the buffer (Ollama
+            // sometimes omits the final `\n` before closing the stream).
+            let trailing = buf.trim();
+            if !trailing.is_empty() {
+                if let Ok(chunk_data) = serde_json::from_str::<OllamaStreamResponse>(trailing) {
+                    if let Some(error) = chunk_data.error {
+                        on_token(GenerationProgress::error(&error));
+                        return Err(format!("Ollama error: {}", error));
+                    }
+                    if let Some(token) = chunk_data.response {
+                        token_count += 1;
+                        generated_text.push_str(&token);
+                        let elapsed = start_time.elapsed();
+                        let speed = token_count as f64 / elapsed.as_secs_f64().max(0.001);
+                        on_token(GenerationProgress::token(token, token_count, speed));
+                    }
+                    if chunk_data.done {
+                        let elapsed = start_time.elapsed();
+                        let final_speed = token_count as f64 / elapsed.as_secs_f64().max(0.001);
+                        on_token(GenerationProgress::complete(token_count, &generated_text, final_speed));
+                        log::info!(target: "inference", "Streaming complete (trailing): {} tokens in {:.2}s",
+                                  token_count, elapsed.as_secs_f64());
+                        return Ok(generated_text);
+                    }
+                }
+            }
+
             // If we exit loop without 'done', still return what we have
             let elapsed = start_time.elapsed();
             let final_speed = token_count as f64 / elapsed.as_secs_f64().max(0.001);
             on_token(GenerationProgress::complete(token_count, &generated_text, final_speed));
-            
+
             Ok(generated_text)
         }
         Err(e) => {
@@ -536,6 +608,7 @@ pub async fn generate_text_streaming(
 }
 
 /// Synchronous wrapper for non-streaming generation (delegates to async version)
+#[allow(dead_code)] // Kept for API symmetry with `generate_text_streaming`; the `generate` Tauri command calls `generate_text_async` directly.
 pub async fn generate_text(
     prompt: &str,
     settings: &InferenceSettings,
@@ -599,32 +672,60 @@ pub async fn pull_model(model_name: &str, mut on_progress: impl FnMut(String) + 
         return Err(format!("Pull failed: {}", response.status()));
     }
     
+    // Stream newline-delimited JSON status objects from Ollama.
+    // Maintain a `buf` across chunks: chunks do NOT align with line
+    // boundaries, so a status object split across two chunks would be
+    // silently dropped by `for line in text.lines()`. (Fixes H8.)
     let mut stream = response.bytes_stream();
-    
+    let mut buf = String::new();
+
     while let Some(chunk_result) = stream.next().await {
         if let Ok(bytes) = chunk_result {
-            let bytes_vec = bytes.to_vec();
-            let text = String::from_utf8_lossy(&bytes_vec);
-            for line in text.lines() {
+            buf.push_str(&String::from_utf8_lossy(&bytes));
+
+            while let Some(idx) = buf.find('\n') {
+                let line: String = buf.drain(..=idx).collect();
+                let line = line.trim();
+                if line.is_empty() { continue; }
+
                 if let Ok(status) = serde_json::from_str::<serde_json::Value>(line) {
                     if let Some(msg) = status.get("status").and_then(|v| v.as_str()) {
                         on_progress(msg.to_string());
                     }
-                    
+
                     // Check for completion or error
                     if status.get("error").is_some() {
                         let err = status["error"].as_str().unwrap_or("Unknown error");
                         return Err(format!("Pull failed: {}", err));
                     }
-                    
+
                     if status.get("status").and_then(|s| s.as_str()) == Some("success") {
                         return Ok(());
                     }
+                } else {
+                    log::warn!(target: "model", "Failed to parse pull status line: {}", line);
                 }
             }
         }
     }
-    
+
+    // Drain any trailing partial line.
+    let trailing = buf.trim();
+    if !trailing.is_empty() {
+        if let Ok(status) = serde_json::from_str::<serde_json::Value>(trailing) {
+            if let Some(msg) = status.get("status").and_then(|v| v.as_str()) {
+                on_progress(msg.to_string());
+            }
+            if status.get("error").is_some() {
+                let err = status["error"].as_str().unwrap_or("Unknown error");
+                return Err(format!("Pull failed: {}", err));
+            }
+            if status.get("status").and_then(|s| s.as_str()) == Some("success") {
+                return Ok(());
+            }
+        }
+    }
+
     Ok(())
 }
 

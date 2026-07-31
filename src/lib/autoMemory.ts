@@ -10,8 +10,7 @@
  * Memory is stored in .codemate/memory/ directory as markdown files.
  */
 
-import { readTextFile, writeTextFile, exists, mkdir } from '@tauri-apps/plugin-fs';
-import { invoke } from '@tauri-apps/api/core';
+import { fileCommands } from './tauri';
 import type { MemoryEntry, UserPreferences, ProjectContext } from './projectMemory';
 import { DEFAULT_PREFERENCES } from './projectMemory';
 
@@ -69,11 +68,11 @@ const PATTERNS_FILE = `${MEMORY_DIR}/patterns.md`;
 export async function initializeMemory(projectPath: string): Promise<void> {
   const memoryPath = `${projectPath}/${MEMORY_DIR}`;
   
-  if (!await exists(memoryPath)) {
-    await mkdir(memoryPath, { recursive: true });
+  if (!await fileCommands.pathExists(memoryPath)) {
+    await fileCommands.createDirectory(memoryPath);
     
     // Create default index
-    await writeTextFile(
+    await fileCommands.writeFile(
       `${memoryPath}/index.json`,
       JSON.stringify({
         version: 1,
@@ -92,11 +91,11 @@ export async function loadMemories(projectPath: string): Promise<MemoryEntry[]> 
   try {
     const indexPath = `${projectPath}/${MEMORY_INDEX_FILE}`;
     
-    if (!await exists(indexPath)) {
+    if (!await fileCommands.pathExists(indexPath)) {
       return [];
     }
     
-    const content = await readTextFile(indexPath);
+    const content = await fileCommands.readFile(indexPath);
     const data = JSON.parse(content);
     
     return (data.memories || []).map((m: any) => ({
@@ -119,7 +118,7 @@ export async function saveMemory(
   const memoryPath = `${projectPath}/${MEMORY_DIR}`;
   
   // Ensure directory exists
-  if (!await exists(memoryPath)) {
+  if (!await fileCommands.pathExists(memoryPath)) {
     await initializeMemory(projectPath);
   }
   
@@ -163,7 +162,7 @@ export async function saveMemory(
     }
     
     // Save updated index
-    await writeTextFile(
+    await fileCommands.writeFile(
       `${memoryPath}/index.json`,
       JSON.stringify({
         version: 1,
@@ -197,7 +196,7 @@ export async function touchMemory(
     
     // Save back
     const memoryPath = `${projectPath}/${MEMORY_DIR}`;
-    await writeTextFile(
+    await fileCommands.writeFile(
       `${memoryPath}/index.json`,
       JSON.stringify({
         version: 1,
@@ -224,7 +223,7 @@ export async function deleteMemory(projectPath: string, memoryId: string): Promi
   memories.splice(idx, 1);
   
   const memoryPath = `${projectPath}/${MEMORY_DIR}`;
-  await writeTextFile(
+  await fileCommands.writeFile(
     `${memoryPath}/index.json`,
     JSON.stringify({
       version: 1,
@@ -251,11 +250,11 @@ export async function loadUserPreferences(projectPath: string): Promise<UserPref
   try {
     const prefsPath = `${projectPath}/${PREFERENCES_FILE}`;
     
-    if (!await exists(prefsPath)) {
+    if (!await fileCommands.pathExists(prefsPath)) {
       return { ...DEFAULT_PREFERENCES };
     }
     
-    const content = await readTextFile(prefsPath);
+    const content = await fileCommands.readFile(prefsPath);
     return { ...DEFAULT_PREFERENCES, ...JSON.parse(content) };
   } catch {
     return { ...DEFAULT_PREFERENCES };
@@ -271,14 +270,14 @@ export async function saveUserPreferences(
 ): Promise<void> {
   const memoryPath = `${projectPath}/${MEMORY_DIR}`;
   
-  if (!await exists(memoryPath)) {
+  if (!await fileCommands.pathExists(memoryPath)) {
     await initializeMemory(projectPath);
   }
   
   const existing = await loadUserPreferences(projectPath);
   const updated = { ...existing, ...prefs };
   
-  await writeTextFile(
+  await fileCommands.writeFile(
     `${memoryPath}/preferences.json`,
     JSON.stringify(updated, null, 2)
   );

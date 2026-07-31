@@ -1,6 +1,9 @@
 // System Specifications Detection & Model Recommendation Engine
 // This module detects hardware capabilities and recommends optimal AI models
 
+import { isTauri } from './isTauri';
+import { appCommands } from './tauri';
+
 export interface SystemSpecs {
   // Basic Info
   os: string;
@@ -50,18 +53,20 @@ export interface ModelRecommendation {
 // In Tauri app, this will use the Rust backend command
 // For web/demo, it uses browser APIs and defaults
 export async function detectSystemSpecs(): Promise<SystemSpecs> {
-  // Try to get from Tauri backend first
-  if (window.__TAURI__) {
+  // Try to get from Tauri backend first (only when actually running inside
+  // the Tauri webview — in a plain browser `appCommands.getSystemInfo()`
+  // would dispatch to the mock, but the browser fallback below is more
+  // accurate because it reads real `navigator.hardwareConcurrency` /
+  // `navigator.deviceMemory` / `navigator.storage.estimate()`).
+  if (isTauri) {
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const sysInfo = await invoke<any>('get_system_info');
-      
+      const sysInfo = await appCommands.getSystemInfo();
       return parseTauriSystemInfo(sysInfo);
     } catch (e) {
       console.warn('Tauri system info failed, using fallback:', e);
     }
   }
-  
+
   // Fallback: Browser-based detection + sensible defaults
   return detectBrowserFallback();
 }

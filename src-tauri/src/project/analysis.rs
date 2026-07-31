@@ -2,6 +2,13 @@
 //
 // Provides functionality for analyzing project structure,
 // language distribution, code statistics, etc.
+//
+// NOTE: This module is currently UNUSED — `commands::project` defines its
+// own `LanguageStats` struct and computes the breakdown inline. Kept as
+// scaffolding for a future refactor. `#![allow(dead_code)]` silences the
+// resulting warnings.
+
+#![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
 

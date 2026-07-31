@@ -10,6 +10,7 @@ mod commands;
 mod model;
 mod project;
 
+use std::sync::Mutex;
 use tauri::Manager;
 
 pub fn run() {
@@ -44,10 +45,15 @@ pub fn run() {
             commands::system::get_system_info,
             commands::system::execute_command,
             commands::system::get_app_version,
+            commands::system::kill_process,
+            commands::system::open_external,
         ])
         .setup(|app| {
-            // Initialize app state with model manager
-            app.manage(model::ModelState::default());
+            // Initialize app state with model manager.
+            // Commands take `State<'_, Mutex<ModelState>>`, so the managed
+            // value MUST be wrapped in a Mutex — otherwise state lookup panics
+            // at runtime ("state Mutex<ModelState> not managed").
+            app.manage(Mutex::new(model::ModelState::default()));
             
             // Log startup info
             log::info!(target: "app", "CodeMate AI Assistant starting up...");

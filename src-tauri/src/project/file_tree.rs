@@ -1,6 +1,13 @@
 // File Tree Module
 //
-// Handles building and managing file tree structures
+// Handles building and managing file tree structures.
+//
+// NOTE: This module is currently UNUSED — `commands::project` defines its
+// own `ProjectFile` struct and builds the tree inline. This module is kept
+// as scaffolding for a future refactor that consolidates the two
+// representations. `#![allow(dead_code)]` silences the resulting warnings.
+
+#![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
 

@@ -11,6 +11,29 @@ import type {
 } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
+// Revive Date fields that JSON serialisation turns into ISO strings, so
+// persisted conversations don't crash code that calls .getTime()/.toISOString().
+function reviveDate(d: unknown): Date {
+  if (d instanceof Date) return d;
+  if (typeof d === 'string' || typeof d === 'number') {
+    const parsed = new Date(d);
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  }
+  return new Date();
+}
+
+function reviveConversations(input: unknown): Conversation[] {
+  if (!Array.isArray(input)) return [];
+  return input.map((c: any) => ({
+    ...c,
+    createdAt: reviveDate(c?.createdAt),
+    updatedAt: reviveDate(c?.updatedAt),
+    messages: Array.isArray(c?.messages)
+      ? c.messages.map((m: any) => ({ ...m, timestamp: reviveDate(m?.timestamp) }))
+      : [],
+  }));
+}
+
 interface AppState {
   // Conversations & Messages
   conversations: Conversation[];
@@ -473,6 +496,7 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'ai-assistant-storage',
+      version: 1,
       partialize: (state) => ({
         conversations: state.conversations,
         activeConversationId: state.activeConversationId,
@@ -481,6 +505,15 @@ export const useStore = create<AppState>()(
         settings: state.settings,
         projectPath: state.projectPath,
       }),
+      // Revive Date instances on every rehydrate (JSON stores them as strings).
+      merge: (persistedState, currentState) => {
+        const p = (persistedState ?? {}) as Partial<AppState>;
+        return {
+          ...currentState,
+          ...p,
+          conversations: reviveConversations(p.conversations),
+        };
+      },
     }
   )
 );

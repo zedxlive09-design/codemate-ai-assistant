@@ -350,16 +350,25 @@ function ConversationItem({
   // Count user vs assistant messages
   const userMessageCount = conversation.messages.filter((m: any) => m.role === 'user').length;
 
-  // Highlight matching text
+  // Highlight matching text (XSS-safe: escape HTML first, then wrap matches).
+  const escapeHtml = (s: string): string =>
+    s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
   const highlightText = (text: string, query: string) => {
-    if (!query) return text;
-    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-    const parts = text.split(regex);
-    return parts.map((part, i) => 
-      regex.test(part) 
-        ? `<mark class="bg-primary-500/30 text-primary-300 rounded px-0.5">${part}</mark>` 
-        : part
-    ).join('');
+    const escaped = escapeHtml(text);
+    if (!query) return escaped;
+    const safeQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(${safeQuery})`, 'gi');
+    // Apply regex to the ESCAPED string so user content can never inject HTML.
+    return escaped.replace(
+      re,
+      '<mark class="bg-primary-500/30 text-primary-300 rounded px-0.5">$1</mark>'
+    );
   };
 
   return (

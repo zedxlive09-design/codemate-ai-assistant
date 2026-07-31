@@ -4656,3 +4656,34 @@ a:active {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---- Appended: toast + scrollbar utilities (added during review fix pass) ---- */
+/* Toast progress bar (referenced by Toast.tsx) */
+@keyframes toast-progress {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+/* Toast slide-down entrance (used by ToastContainer) */
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.slide-down {
+  animation: slide-down 0.25s ease-out;
+}
+
+/* Custom scrollbar styling for long lists */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.35);
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(148, 163, 184, 0.55);
+}

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { useToast } from './Toast';
+import { terminalCommands } from '../lib/tauri';
 
 interface TerminalLine {
   id: string;
@@ -120,21 +121,32 @@ export default function TerminalPanel({ isOpen, onClose }: TerminalPanelProps) {
       return;
     }
 
-    // Try to execute as shell command via Tauri
+    // Try to execute as shell command via the Tauri bridge.
+    // `terminalCommands.executeCommand` returns a `CommandResult` with
+    // `{ stdout, stderr, code }`; in browser mode it dispatches to a mock.
     setIsRunning(true);
     try {
-      // Dynamic import for Tauri
-      const { invoke } = await import('@tauri-apps/api/core');
-      const result: string = await invoke('execute_command', { 
-        command: cmd, 
-        workingDir: projectPath || undefined 
-      });
-      
-      if (result.trim()) {
-        // Split output into lines and add each
-        result.split('\n').forEach(line => {
+      const result = await terminalCommands.executeCommand(
+        cmd,
+        projectPath || undefined
+      );
+
+      const stdout = (result?.stdout ?? '').trim();
+      const stderr = (result?.stderr ?? '').trim();
+      const exitCode = typeof result?.code === 'number' ? result.code : 0;
+
+      if (stdout) {
+        stdout.split('\n').forEach(line => {
           if (line.trim()) addLine('output', line);
         });
+      }
+      if (stderr) {
+        stderr.split('\n').forEach(line => {
+          if (line.trim()) addLine('error', line);
+        });
+      }
+      if (exitCode !== 0 && !stdout && !stderr) {
+        addLine('error', `Process exited with code ${exitCode}`);
       }
     } catch (error: unknown) {
       const err = error as { message?: string };
