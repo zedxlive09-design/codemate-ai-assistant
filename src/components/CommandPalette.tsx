@@ -37,6 +37,8 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
     activeConversationId,
     togglePinConversation,
     pinnedConversationIds,
+    renameConversation,
+    duplicateConversation,
   } = useStore();
   const { setTheme, cycleTheme, resetTheme, config } = useTheme();
 
@@ -135,6 +137,32 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
       category: 'chat',
       action: () => {
         if (activeConversationId) togglePinConversation(activeConversationId);
+        onClose();
+      },
+    },
+    {
+      id: 'rename-conversation',
+      label: 'Rename Current Conversation...',
+      shortcut: 'Alt+R',
+      icon: '✏️',
+      category: 'chat',
+      action: () => {
+        const conv = conversations.find((c) => c.id === activeConversationId);
+        const next = window.prompt('Rename conversation:', conv?.title || '');
+        if (next && next.trim() && activeConversationId) {
+          renameConversation(activeConversationId, next.trim());
+        }
+        onClose();
+      },
+    },
+    {
+      id: 'duplicate-conversation',
+      label: 'Duplicate Current Conversation',
+      shortcut: 'Alt+D',
+      icon: '📋',
+      category: 'chat',
+      action: () => {
+        if (activeConversationId) duplicateConversation(activeConversationId);
         onClose();
       },
     },

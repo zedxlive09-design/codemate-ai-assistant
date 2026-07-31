@@ -85,6 +85,8 @@ interface AppState {
   deleteConversation: (id: string) => void;
   deleteAllConversations: () => void;
   setActiveConversation: (id: string) => void;
+  renameConversation: (id: string, title: string) => void;
+  duplicateConversation: (id: string) => string | null;
   addMessage: (conversationId: string, message: Omit<Message, 'id' | 'timestamp'>) => void;
   updateMessage: (conversationId: string, messageId: string, content: string) => void;
   importConversations: (conversations: Conversation[]) => void;
@@ -261,6 +263,44 @@ export const useStore = create<AppState>()(
 
       setActiveConversation: (id: string) => {
         set({ activeConversationId: id });
+      },
+
+      renameConversation: (id: string, title: string) => {
+        const trimmed = title.trim();
+        if (!trimmed) return;
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === id ? { ...c, title: trimmed, updatedAt: new Date() } : c
+          ),
+        }));
+      },
+
+      duplicateConversation: (id: string) => {
+        const original = get().conversations.find((c) => c.id === id);
+        if (!original) return null;
+        const newId = uuidv4();
+        const copy: Conversation = {
+          id: newId,
+          title: `${original.title} (copy)`,
+          // Deep-copy messages with fresh ids + timestamps so edits to the
+          // duplicate don't alias the original.
+          messages: original.messages.map((m) => ({
+            ...m,
+            id: uuidv4(),
+            timestamp: new Date(m.timestamp instanceof Date ? m.timestamp.getTime() : new Date(m.timestamp).getTime()),
+          })),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          projectPath: original.projectPath,
+        };
+        // Insert the copy right after the original.
+        set((state) => {
+          const idx = state.conversations.findIndex((c) => c.id === id);
+          const next = [...state.conversations];
+          next.splice(idx >= 0 ? idx + 1 : 0, 0, copy);
+          return { conversations: next, activeConversationId: newId };
+        });
+        return newId;
       },
 
       addMessage: (conversationId: string, message: Omit<Message, 'id' | 'timestamp'>) => {

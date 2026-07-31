@@ -95,7 +95,9 @@ export default function App() {
     toggleProfilePanel,
     toggleMemoryPanel,
     togglePinConversation,
-    pinnedConversationIds
+    pinnedConversationIds,
+    renameConversation,
+    duplicateConversation
   } = useStore();
 
   const { isOpen: isPaletteOpen, setIsOpen: setIsPaletteOpen } = useCommandPalette();
@@ -464,6 +466,38 @@ export default function App() {
         }
       }
 
+      // Rename the active conversation (Alt+R) — round 8.
+      // Prompts for a new title; falls back to a window.prompt (works in both
+      // browser-demo and Tauri modes). Plain Alt+R is conflict-free.
+      if (
+        !isMod &&
+        !e.shiftKey &&
+        e.altKey &&
+        (e.key === 'r' || e.key === 'R')
+      ) {
+        if (activeConversationId) {
+          e.preventDefault();
+          const conv = conversations.find((c) => c.id === activeConversationId);
+          const next = window.prompt('Rename conversation:', conv?.title || '');
+          if (next && next.trim()) {
+            renameConversation(activeConversationId, next.trim());
+          }
+        }
+      }
+
+      // Duplicate the active conversation (Alt+D) — round 8.
+      if (
+        !isMod &&
+        !e.shiftKey &&
+        e.altKey &&
+        (e.key === 'd' || e.key === 'D')
+      ) {
+        if (activeConversationId) {
+          e.preventDefault();
+          duplicateConversation(activeConversationId);
+        }
+      }
+
       // Escape key - close panels.
       // Focus-mode exit takes priority over every other Escape handler so
       // users can always leave distraction-free mode with a single Esc.
@@ -519,6 +553,9 @@ export default function App() {
     exitFocusMode,
     activeConversationId,
     togglePinConversation,
+    renameConversation,
+    duplicateConversation,
+    conversations,
   ]);
 
   // Listen for the cross-component "toggle focus mode" event so the

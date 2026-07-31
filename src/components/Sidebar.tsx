@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useStore } from '../store/useStore';
 import { fileCommands } from '../lib/tauri';
 import { Brain, Search, Tag, Clock, X, Filter, Pin } from 'lucide-react';
+import { AVAILABLE_TAGS } from './TagPicker';
 
 // Format date for display
 function formatDate(date: Date | string | number): string {
@@ -38,9 +39,12 @@ export default function Sidebar() {
     showMemoryPanel,
     pinnedConversationIds,
     togglePinConversation,
+    conversationTags,
   } = useStore();
 
   const [searchQuery, setSearchQuery] = useState('');
+  // Transient tag filter state (view-only — not persisted to the store).
+  const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
 
   const handleNewChat = () => {
     createConversation();
@@ -75,15 +79,54 @@ export default function Sidebar() {
     return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   });
 
-  // Filter conversations based on search query
-  const filteredConversations = searchQuery.trim() 
-    ? sortedConversations.filter(conv => 
-        conv.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        conv.messages.some((m: any) => 
-          m.content.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      )
-    : sortedConversations;
+  // Derive the unique set of tags currently in use across all conversations,
+  // along with a per-tag conversation count for the chip badges. Tag display
+  // names come from TagPicker.AVAILABLE_TAGS (the only tag-definition source
+  // in the codebase); any unknown tag ID falls back to its raw string.
+  const uniqueTags = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const conv of conversations) {
+      const tagIds = conversationTags[conv.id] || [];
+      for (const tagId of tagIds) {
+        counts.set(tagId, (counts.get(tagId) || 0) + 1);
+      }
+    }
+    return Array.from(counts.entries())
+      .map(([id, count]) => ({
+        id,
+        label: AVAILABLE_TAGS.find(t => t.id === id)?.label ?? id,
+        count,
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [conversations, conversationTags]);
+
+  const hasActiveTags = activeTags.size > 0;
+
+  const toggleTag = (tagId: string) => {
+    setActiveTags(prev => {
+      const next = new Set(prev);
+      if (next.has(tagId)) next.delete(tagId);
+      else next.add(tagId);
+      return next;
+    });
+  };
+
+  const clearTags = () => setActiveTags(new Set());
+
+  // Filter conversations based on search query AND active tags (OR semantics
+  // across active tags — a conversation matches if it has ANY active tag).
+  const filteredConversations = sortedConversations.filter(conv => {
+    if (hasActiveTags) {
+      const convTags = conversationTags[conv.id] || [];
+      if (!convTags.some(t => activeTags.has(t))) return false;
+    }
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      conv.title.toLowerCase().includes(q) ||
+      conv.messages.some(m => m.content.toLowerCase().includes(q))
+    );
+  });
 
   // Separate pinned and unpinned for display
   const pinnedConversations = filteredConversations.filter(c => pinnedConversationIds.includes(c.id));
@@ -182,6 +225,62 @@ export default function Sidebar() {
               <X size={12} />
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Tag Filter Bar — hidden entirely when no conversations have tags */}
+      <div
+        className={`overflow-hidden transition-all duration-300 ease-out ${
+          uniqueTags.length > 0 ? 'max-h-24 opacity-100' : 'max-h-0 opacity-0'
+        }`}
+      >
+        <div className="px-4 pb-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1">
+            <Tag size={12} className="shrink-0 text-dark-500" />
+
+            {/* All chip — clears the tag filter */}
+            <button
+              onClick={clearTags}
+              className={`shrink-0 inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                !hasActiveTags
+                  ? 'bg-dark-700/60 text-dark-300 border-dark-600'
+                  : 'border-dark-700/50 bg-dark-800/40 text-dark-400 hover:border-dark-600'
+              }`}
+            >
+              All
+              <span className="ml-1 text-[9px] opacity-70">{conversations.length}</span>
+            </button>
+
+            {/* Tag chips */}
+            {uniqueTags.map(({ id, label, count }) => {
+              const isActive = activeTags.has(id);
+              return (
+                <button
+                  key={id}
+                  onClick={() => toggleTag(id)}
+                  className={`shrink-0 inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                    isActive
+                      ? 'bg-[color-mix(in_srgb,var(--cm-primary)_18%,transparent)] border-[var(--cm-primary)] text-white'
+                      : 'border-dark-700/50 bg-dark-800/40 text-dark-400 hover:border-dark-600'
+                  }`}
+                >
+                  {label}
+                  <span className="ml-1 text-[9px] opacity-70">{count}</span>
+                </button>
+              );
+            })}
+
+            {/* Clear button — only visible when a tag filter is active */}
+            {hasActiveTags && (
+              <button
+                onClick={clearTags}
+                className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full text-dark-500 hover:text-dark-200 hover:bg-dark-700/60 transition-all"
+                title="Clear tag filter"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

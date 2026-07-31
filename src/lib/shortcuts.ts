@@ -86,6 +86,8 @@ export const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       { keys: ['Ctrl', 'Shift', 'F'], description: 'Open Global Search (also Ctrl+Shift+H)', category: 'Search' },
       { keys: ['Alt', 'Q'], description: 'Quick Switch Conversation', category: 'Search' },
       { keys: ['Alt', 'P'], description: 'Pin / Unpin Current Conversation', category: 'Search' },
+      { keys: ['Alt', 'R'], description: 'Rename Current Conversation', category: 'Search' },
+      { keys: ['Alt', 'D'], description: 'Duplicate Current Conversation', category: 'Search' },
     ],
   },
   {
