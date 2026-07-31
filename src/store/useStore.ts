@@ -83,10 +83,15 @@ interface AppState {
   // Actions - Conversations
   createConversation: (title?: string) => string;
   deleteConversation: (id: string) => void;
+  deleteConversations: (ids: string[]) => void;
   deleteAllConversations: () => void;
+  archiveConversations: (ids: string[]) => void;
+  unarchiveConversations: (ids: string[]) => void;
   setActiveConversation: (id: string) => void;
   renameConversation: (id: string, title: string) => void;
   duplicateConversation: (id: string) => string | null;
+  clearAllTags: () => void;
+  removeTagFromAllConversations: (tagId: string) => void;
   addMessage: (conversationId: string, message: Omit<Message, 'id' | 'timestamp'>) => void;
   updateMessage: (conversationId: string, messageId: string, content: string) => void;
   importConversations: (conversations: Conversation[]) => void;
@@ -253,10 +258,35 @@ export const useStore = create<AppState>()(
           const filtered = state.conversations.filter((c) => c.id !== id);
           return {
             conversations: filtered,
-            activeConversationId: state.activeConversationId === id 
-              ? (filtered[0]?.id || null) 
+            activeConversationId: state.activeConversationId === id
+              ? (filtered[0]?.id || null)
               : state.activeConversationId,
           };
+        });
+      },
+
+      deleteConversations: (ids: string[]) => {
+        const idSet = new Set(ids);
+        set((state) => {
+          const filtered = state.conversations.filter((c) => !idSet.has(c.id));
+          const activeCleared = idSet.has(state.activeConversationId || '');
+          return {
+            conversations: filtered,
+            activeConversationId: activeCleared
+              ? (filtered[0]?.id || null)
+              : state.activeConversationId,
+            // Also clean up pinned + archived + tags for deleted convos.
+            pinnedConversationIds: state.pinnedConversationIds.filter((p) => !idSet.has(p)),
+            archivedConversationIds: state.archivedConversationIds.filter((a) => !idSet.has(a)),
+          };
+        });
+        // Clean up conversationTags (separate set call to keep the shape simple).
+        set((state) => {
+          const nextTags: Record<string, string[]> = {};
+          for (const [cid, tags] of Object.entries(state.conversationTags)) {
+            if (!idSet.has(cid)) nextTags[cid] = tags;
+          }
+          return { conversationTags: nextTags };
         });
       },
 
@@ -264,7 +294,31 @@ export const useStore = create<AppState>()(
         set({
           conversations: [],
           activeConversationId: null,
+          pinnedConversationIds: [],
+          archivedConversationIds: [],
+          conversationTags: {},
         });
+      },
+
+      archiveConversations: (ids: string[]) => {
+        const idSet = new Set(ids);
+        set((state) => ({
+          archivedConversationIds: [
+            ...state.archivedConversationIds,
+            ...ids.filter((id) => !state.archivedConversationIds.includes(id)),
+          ],
+          // If the active conversation was archived, switch to the first non-archived.
+          activeConversationId: idSet.has(state.activeConversationId || '')
+            ? (state.conversations.find((c) => !idSet.has(c.id) && !state.archivedConversationIds.includes(c.id))?.id || null)
+            : state.activeConversationId,
+        }));
+      },
+
+      unarchiveConversations: (ids: string[]) => {
+        const idSet = new Set(ids);
+        set((state) => ({
+          archivedConversationIds: state.archivedConversationIds.filter((a) => !idSet.has(a)),
+        }));
       },
 
       setActiveConversation: (id: string) => {
@@ -538,6 +592,21 @@ export const useStore = create<AppState>()(
             [conversationId]: (state.conversationTags[conversationId] || []).filter(t => t !== tagId),
           },
         }));
+      },
+
+      clearAllTags: () => {
+        set({ conversationTags: {} });
+      },
+
+      removeTagFromAllConversations: (tagId: string) => {
+        set((state) => {
+          const nextTags: Record<string, string[]> = {};
+          for (const [cid, tags] of Object.entries(state.conversationTags)) {
+            const filtered = tags.filter((t) => t !== tagId);
+            if (filtered.length > 0) nextTags[cid] = filtered;
+          }
+          return { conversationTags: nextTags };
+        });
       },
 
       // Archived Conversations

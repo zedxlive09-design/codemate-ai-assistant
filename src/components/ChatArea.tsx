@@ -8,8 +8,9 @@ const MessageBubble = React.lazy(() => import('./MessageBubble'));
 import ChatInput from './ChatInput';
 import WelcomeScreen from './WelcomeScreen';
 import ConversationStatsPopover from './ConversationStatsPopover';
+import WordFrequencyPanel from './WordFrequencyPanel';
 import { exportConversationToMarkdown, exportConversationsToJson, downloadFile } from '../lib/conversationExport';
-import { Brain, Clock, MessageSquare, Sparkles, Download, ChevronDown, FileText, FileJson } from 'lucide-react';
+import { Brain, Clock, MessageSquare, Sparkles, Download, ChevronDown, FileText, FileJson, Type } from 'lucide-react';
 
 /**
  * Lightweight placeholder shown while the lazy MessageBubble (and its
@@ -46,6 +47,7 @@ export default function ChatArea() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [showWordFreq, setShowWordFreq] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
@@ -142,6 +144,19 @@ export default function ChatArea() {
           {activeConversation.messages.length > 0 && (
             <>
               <ConversationStatsPopover conversation={activeConversation} />
+
+              {/* Word Frequency analysis (round 10 — Task 16-a) */}
+              <button
+                type="button"
+                onClick={() => setShowWordFreq(true)}
+                aria-haspopup="dialog"
+                aria-label="Word frequency analysis"
+                title="Word frequency analysis"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-slate-700/50 bg-slate-800/40 hover:bg-[color-mix(in_srgb,var(--cm-primary)_15%,transparent)] hover:border-[var(--cm-primary)] text-slate-300 hover:text-white transition-all"
+              >
+                <Type size={12} />
+                <span className="hidden sm:inline">Words</span>
+              </button>
 
               {/* Export dropdown: Markdown + JSON (round 7) */}
               <div ref={exportMenuRef} className="relative">
@@ -281,6 +296,14 @@ export default function ChatArea() {
 
       {/* Input Area */}
       <ChatInput conversationId={activeConversation.id} />
+
+      {/* Word Frequency overlay (round 10 — Task 16-a). Fixed-positioned,
+          so it just needs to live somewhere in the tree. */}
+      <WordFrequencyPanel
+        conversation={activeConversation}
+        isOpen={showWordFreq}
+        onClose={() => setShowWordFreq(false)}
+      />
     </div>
   );
 }

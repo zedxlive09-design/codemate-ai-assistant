@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { fileCommands } from '../lib/tauri';
-import { Brain, Search, Tag, Clock, X, Filter, Pin, Archive, ArchiveRestore, Package, ChevronDown, ChevronRight, Edit2, Copy } from 'lucide-react';
+import { Brain, Search, Tag, Tags, CheckSquare, Clock, X, Filter, Pin, Archive, ArchiveRestore, Package, ChevronDown, ChevronRight, Edit2, Copy } from 'lucide-react';
 import { AVAILABLE_TAGS } from './TagPicker';
 import type { Conversation } from '../types';
 
@@ -52,11 +52,15 @@ function formatDate(date: Date | string | number): string {
 }
 
 export default function Sidebar() {
+  // Helper: resolve a tag id to its color (from AVAILABLE_TAGS, with fallback).
+  const getTagColor = (id: string): string => AVAILABLE_TAGS.find((t) => t.id === id)?.color ?? '#64748b';
   const {
     conversations,
     activeConversationId,
     createConversation,
     deleteConversation,
+    deleteConversations,
+    deleteAllConversations,
     setActiveConversation,
     projectPath,
     setProjectPath,
@@ -67,12 +71,21 @@ export default function Sidebar() {
     conversationTags,
     archivedConversationIds,
     archiveConversation,
+    archiveConversations,
     unarchiveConversation,
     renameConversation,
     duplicateConversation,
+    clearAllTags,
+    removeTagFromAllConversations,
   } = useStore();
 
   const [searchQuery, setSearchQuery] = useState('');
+  // Bulk-select mode (round 10).
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Tag-management popover (round 10).
+  const [showTagMgmt, setShowTagMgmt] = useState(false);
+  const tagMgmtRef = useRef<HTMLDivElement>(null);
   // Transient tag filter state (view-only — not persisted to the store).
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
   // Collapsible Archived section at the bottom of the conversation list.
@@ -82,6 +95,59 @@ export default function Sidebar() {
 
   const handleNewChat = () => {
     createConversation();
+  };
+
+  // Close the tag-management popover on outside click.
+  useEffect(() => {
+    if (!showTagMgmt) return;
+    const handler = (e: MouseEvent) => {
+      if (tagMgmtRef.current && !tagMgmtRef.current.contains(e.target as Node)) {
+        setShowTagMgmt(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showTagMgmt]);
+
+  // Bulk-select helpers.
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllVisible = () => {
+    setSelectedIds(new Set(filteredConversations.map((c) => c.id)));
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const exitBulkMode = () => {
+    setBulkMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const bulkArchive = () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    if (window.confirm(`Archive ${ids.length} conversation(s)?`)) {
+      archiveConversations(ids);
+      exitBulkMode();
+    }
+  };
+
+  const bulkDelete = () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    if (window.confirm(`Permanently delete ${ids.length} conversation(s)? This cannot be undone.`)) {
+      deleteConversations(ids);
+      exitBulkMode();
+    }
   };
 
   const handleOpenProject = async () => {
@@ -258,11 +324,136 @@ export default function Sidebar() {
           Recent Chats
         </h3>
         {conversations.length > 0 && (
-          <span className="text-[10px] bg-dark-800 text-dark-400 px-2 py-0.5 rounded-full">
-            {filteredConversations.length}/{conversations.length - archivedConversationIds.length}
-          </span>
+          <div className="flex items-center gap-1.5">
+            {/* Tag-management popover (round 10) */}
+            <div ref={tagMgmtRef} className="relative">
+              <button
+                onClick={() => setShowTagMgmt((v) => !v)}
+                className="p-1 rounded-md text-dark-500 hover:text-[var(--cm-primary)] hover:bg-[color-mix(in_srgb,var(--cm-primary)_12%,transparent)] transition-colors"
+                title="Manage tags"
+                aria-label="Manage tags"
+                aria-haspopup="menu"
+                aria-expanded={showTagMgmt}
+              >
+                <Tags size={13} />
+              </button>
+              {showTagMgmt && (
+                <div
+                  role="menu"
+                  className="stats-popover-enter absolute right-0 top-full mt-1 w-56 glass-card rounded-xl border border-slate-700/50 shadow-xl overflow-hidden z-50"
+                >
+                  <div className="px-3 py-2 text-[10px] font-bold text-dark-500 uppercase tracking-wider border-b border-slate-700/40">
+                    Tag Management
+                  </div>
+                  {uniqueTags.length === 0 ? (
+                    <div className="px-3 py-3 text-xs text-dark-500">No tags in use.</div>
+                  ) : (
+                    uniqueTags.map((tag) => (
+                      <div
+                        key={tag.id}
+                        className="flex items-center justify-between px-3 py-2 text-xs text-slate-300 hover:bg-[color-mix(in_srgb,var(--cm-primary)_10%,transparent)] transition-colors"
+                      >
+                        <span className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getTagColor(tag.id) }} />
+                          {tag.label}
+                          <span className="text-[9px] text-dark-500">{tag.count}</span>
+                        </span>
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Remove "${tag.label}" from all ${tag.count} conversation(s)?`)) {
+                              removeTagFromAllConversations(tag.id);
+                            }
+                          }}
+                          className="p-0.5 rounded text-dark-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          title={`Remove "${tag.label}" from all conversations`}
+                          aria-label={`Remove ${tag.label} tag from all conversations`}
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                  {uniqueTags.length > 0 && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Remove ALL tags from ALL conversations?')) {
+                          clearAllTags();
+                        }
+                      }}
+                      className="w-full px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors text-left border-t border-slate-700/40"
+                    >
+                      Clear all tags
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            {/* Bulk-select toggle (round 10) */}
+            <button
+              onClick={() => (bulkMode ? exitBulkMode() : setBulkMode(true))}
+              className={`p-1 rounded-md transition-colors ${
+                bulkMode
+                  ? 'text-[var(--cm-primary)] bg-[color-mix(in_srgb,var(--cm-primary)_15%,transparent)]'
+                  : 'text-dark-500 hover:text-[var(--cm-primary)] hover:bg-[color-mix(in_srgb,var(--cm-primary)_12%,transparent)]'
+              }`}
+              title={bulkMode ? 'Exit bulk select' : 'Bulk select'}
+              aria-label={bulkMode ? 'Exit bulk select' : 'Bulk select'}
+              aria-pressed={bulkMode}
+            >
+              <CheckSquare size={13} />
+            </button>
+            <span className="text-[10px] bg-dark-800 text-dark-400 px-2 py-0.5 rounded-full">
+              {filteredConversations.length}/{conversations.length - archivedConversationIds.length}
+            </span>
+          </div>
         )}
       </div>
+
+      {/* Bulk-action toolbar (round 10) */}
+      {bulkMode && (
+        <div className="px-4 py-2 flex items-center gap-2 bg-[color-mix(in_srgb,var(--cm-primary)_8%,transparent)] border-y border-slate-700/40">
+          <span className="text-[11px] text-slate-300 flex-1">
+            {selectedIds.size} selected
+          </span>
+          <button
+            onClick={selectAllVisible}
+            className="px-2 py-1 text-[10px] rounded-md text-slate-300 hover:bg-slate-700/50 transition-colors"
+            title="Select all visible"
+          >
+            All
+          </button>
+          <button
+            onClick={clearSelection}
+            className="px-2 py-1 text-[10px] rounded-md text-slate-300 hover:bg-slate-700/50 transition-colors"
+            title="Clear selection"
+          >
+            None
+          </button>
+          <button
+            onClick={bulkArchive}
+            disabled={selectedIds.size === 0}
+            className="px-2 py-1 text-[10px] rounded-md text-amber-400 hover:bg-amber-500/15 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Archive selected"
+          >
+            Archive
+          </button>
+          <button
+            onClick={bulkDelete}
+            disabled={selectedIds.size === 0}
+            className="px-2 py-1 text-[10px] rounded-md text-red-400 hover:bg-red-500/15 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Delete selected"
+          >
+            Delete
+          </button>
+          <button
+            onClick={exitBulkMode}
+            className="px-2 py-1 text-[10px] rounded-md text-slate-400 hover:text-white hover:bg-slate-700/50 transition-colors"
+            title="Exit bulk mode"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Search Input */}
       <div className="px-4 pb-2">
@@ -424,6 +615,9 @@ export default function Sidebar() {
                         onDuplicate={() => duplicateConversation(conversation.id)}
                         isPinned={true}
                         searchQuery={searchQuery}
+                        bulkMode={bulkMode}
+                        selected={selectedIds.has(conversation.id)}
+                        onToggleSelect={() => toggleSelect(conversation.id)}
                       />
                     ))}
 
@@ -451,6 +645,9 @@ export default function Sidebar() {
                     onDuplicate={() => duplicateConversation(conversation.id)}
                     isPinned={false}
                     searchQuery={searchQuery}
+                    bulkMode={bulkMode}
+                    selected={selectedIds.has(conversation.id)}
+                    onToggleSelect={() => toggleSelect(conversation.id)}
                   />
                 ))}
               </div>
@@ -563,6 +760,9 @@ function ConversationItem({
   onDuplicate,
   isPinned = false,
   searchQuery = '',
+  bulkMode = false,
+  selected = false,
+  onToggleSelect,
 }: {
   conversation: any; // Conversation type from store
   isActive: boolean;
@@ -575,6 +775,9 @@ function ConversationItem({
   onDuplicate?: () => void;
   isPinned?: boolean;
   searchQuery?: string;
+  bulkMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(conversation.title);
@@ -625,7 +828,7 @@ function ConversationItem({
 
   return (
     <div
-      onClick={onSelect}
+      onClick={bulkMode && onToggleSelect ? onToggleSelect : onSelect}
       className={`
         group relative p-3 rounded-xl cursor-pointer transition-all duration-200
         ${isPinned 
@@ -634,15 +837,29 @@ function ConversationItem({
             ? 'border shadow-sm' 
             : 'hover:bg-dark-800/60 border border-transparent hover:border-dark-700/30'
         }
+        ${selected ? 'ring-1 ring-[var(--cm-primary)] bg-[color-mix(in_srgb,var(--cm-primary)_10%,transparent)]' : ''}
       `}
       style={{
         animationDelay: `${index * 50}ms`,
-        ...(isActive && !isPinned ? {
+        ...(isActive && !isPinned && !selected ? {
           backgroundImage: 'linear-gradient(to right, color-mix(in srgb, var(--cm-primary) 15%, transparent), color-mix(in srgb, var(--cm-primary) 5%, transparent))',
           borderColor: 'color-mix(in srgb, var(--cm-primary) 30%, transparent)',
         } : {}),
       }}
     >
+      {/* Bulk-select checkbox (round 10) */}
+      {bulkMode && onToggleSelect && (
+        <div className="absolute left-1.5 top-1/2 -translate-y-1/2 z-10">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            onClick={(e) => e.stopPropagation()}
+            className="w-4 h-4 rounded cursor-pointer accent-[var(--cm-primary)]"
+            aria-label={`Select ${conversation.title}`}
+          />
+        </div>
+      )}
       {/* Active/Pinned indicator */}
       {isActive && !isPinned && (
         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 cm-active-indicator rounded-r-full"></div>
