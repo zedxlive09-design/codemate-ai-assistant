@@ -343,11 +343,13 @@ pub async fn check_ollama_available() -> Result<OllamaStatus, String> {
         Ok(()) => {
             // Get version info using async client
             let client = reqwest::Client::new();
-            let version = client
+            let version = match client
                 .get(format!("{}/api/version", crate::model::OLLAMA_BASE_URL))
                 .send().await
-                .ok()
-                .and_then(|resp| resp.json::<serde_json::Value>().await.ok());
+            {
+                Ok(resp) => resp.json::<serde_json::Value>().await.ok(),
+                Err(_) => None,
+            };
             
             Ok(OllamaStatus {
                 available: true,
