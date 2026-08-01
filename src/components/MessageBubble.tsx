@@ -3,7 +3,9 @@ import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import type { Message } from '../types';
-import { Copy, Check, ThumbsUp, ThumbsDown, RefreshCw, Bookmark } from 'lucide-react';
+import { fileCommands } from '../lib/tauri';
+import { isTauri } from '../lib/isTauri';
+import { Copy, Check, ThumbsUp, ThumbsDown, RefreshCw, Bookmark, Save } from 'lucide-react';
 
 interface MessageBubbleProps {
   message: Message;
@@ -84,26 +86,10 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
                   if (isInline) {
                     return (<code className={`${className} px-1.5 py-0.5 rounded bg-dark-700 text-pink-400 text-sm font-mono`} {...props}>{children}</code>);
                   }
+                  const lang = match[1];
+                  const codeText = String(children).replace(/\n$/, '');
                   return (
-                    <div className="relative group my-3 rounded-lg overflow-hidden border border-dark-700">
-                      <div className="flex items-center justify-between px-4 py-2 bg-dark-900 rounded-t-lg border-b border-dark-700">
-                        <span className="text-xs text-dark-400 font-mono">{match[1]}</span>
-                        <button onClick={() => navigator.clipboard.writeText(String(children).replace(/\n$/, ''))} className="flex items-center gap-1 text-xs text-dark-500 hover:text-white transition-colors opacity-0 group-hover:opacity-100">
-                          <Copy size={12}/> Copy
-                        </button>
-                      </div>
-                      <SyntaxHighlighter
-                        // @ts-expect-error - Style type mismatch from react-syntax-highlighter
-                        style={oneDark}
-                        language={match[1]}
-                        PreTag="div"
-                        customStyle={{ margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: '0.85rem' }}
-                        showLineNumbers
-                        {...props}
-                      >
-                        {String(children).replace(/\n$/, '')}
-                      </SyntaxHighlighter>
-                    </div>
+                    <CodeBlock language={lang} code={codeText} />
                   );
                 },
                 p({ children }) { return <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>; },
@@ -157,6 +143,108 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Language → default file extension mapping.
+const LANG_EXTENSIONS: Record<string, string> = {
+  javascript: 'js', js: 'js', jsx: 'jsx',
+  typescript: 'ts', ts: 'ts', tsx: 'tsx',
+  html: 'html', css: 'css', scss: 'scss',
+  json: 'json', yaml: 'yml', yml: 'yml',
+  python: 'py', py: 'py',
+  rust: 'rs', rs: 'rs',
+  java: 'java', kotlin: 'kt',
+  go: 'go', c: 'c', cpp: 'cpp', 'c++': 'cpp',
+  shell: 'sh', bash: 'sh', sh: 'sh',
+  sql: 'sql', graphql: 'graphql',
+  markdown: 'md', md: 'md',
+  xml: 'xml', svg: 'svg',
+  dockerfile: 'dockerfile',
+  ini: 'ini', toml: 'toml',
+};
+
+/**
+ * CodeBlock — renders a syntax-highlighted code block with Copy + Save buttons.
+ * The Save button uses the Tauri saveFileDialog + writeFile to persist the
+ * code to disk (desktop only). In browser/demo mode it falls back to a
+ * browser download via a Blob URL.
+ */
+function CodeBlock({ language, code }: { language: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSave = async () => {
+    const ext = LANG_EXTENSIONS[language.toLowerCase()] || 'txt';
+    const defaultName = `codemate-snippet.${ext}`;
+
+    if (isTauri) {
+      // Desktop: use the native save dialog + write to the chosen path.
+      try {
+        const path = await fileCommands.saveFileDialog(defaultName);
+        if (path) {
+          await fileCommands.writeFile(path, code);
+          setSaved(true);
+          setTimeout(() => setSaved(false), 2500);
+        }
+      } catch (e) {
+        console.error('Save failed:', e);
+      }
+    } else {
+      // Browser/demo: trigger a download via a Blob URL.
+      const blob = new Blob([code], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = defaultName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    }
+  };
+
+  return (
+    <div className="relative group my-3 rounded-lg overflow-hidden border border-dark-700">
+      <div className="flex items-center justify-between px-4 py-2 bg-dark-900 rounded-t-lg border-b border-dark-700">
+        <span className="text-xs text-dark-400 font-mono">{language}</span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSave}
+            className="flex items-center gap-1 text-xs text-dark-500 hover:text-[var(--cm-primary)] transition-colors"
+            title="Save to file"
+          >
+            {saved ? <Check size={12} className="text-emerald-400" /> : <Save size={12} />}
+            <span className="hidden sm:inline">{saved ? 'Saved' : 'Save'}</span>
+          </button>
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-1 text-xs text-dark-500 hover:text-white transition-colors"
+            title="Copy to clipboard"
+          >
+            {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+            <span className="hidden sm:inline">{copied ? 'Copied' : 'Copy'}</span>
+          </button>
+        </div>
+      </div>
+      <SyntaxHighlighter
+        style={oneDark as any}
+        language={language}
+        PreTag="div"
+        customStyle={{ margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: '0.85rem' }}
+        showLineNumbers
+      >
+        {code}
+      </SyntaxHighlighter>
     </div>
   );
 }
