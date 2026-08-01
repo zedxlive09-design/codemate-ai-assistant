@@ -136,7 +136,7 @@ impl InferenceSettings {
 /// `rename_all = "camelCase"` makes `model_info` serialize as `modelInfo`
 /// to match `LoadModelResult` in `src/lib/tauri.ts`. `default` lets the
 /// frontend send a partial object without breaking deserialization.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct LoadModelResult {
     pub success: bool,
@@ -148,7 +148,7 @@ pub struct LoadModelResult {
 ///
 /// Wire format is camelCase (`contextLength`, `sizeBytes`) to match
 /// `ModelInfo` in `src/lib/tauri.ts`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ModelInfo {
     pub name: String,
@@ -166,7 +166,7 @@ pub struct ModelInfo {
 ///   - `quantization_type` → serialized as `quantization` (NOT `quantizationType`)
 /// `default` lets the frontend send a partial object without breaking
 /// deserialization.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ModelConfig {
     pub id: String,

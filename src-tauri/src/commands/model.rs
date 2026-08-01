@@ -364,7 +364,7 @@ pub async fn validate_model_file(path: String) -> Result<ModelValidationResult, 
 /// `rename_all = "camelCase"` makes `model_info` serialize as `modelInfo`
 /// to match `ModelValidationResult` in `src/lib/tauri.ts`. `default`
 /// allows partial objects to deserialize without error.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ModelValidationResult {
     pub valid: bool,

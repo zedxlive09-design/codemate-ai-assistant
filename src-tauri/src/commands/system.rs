@@ -169,17 +169,21 @@ pub async fn execute_command(
 /// current user — we do not grant elevated kill capability.
 #[tauri::command]
 pub async fn kill_process(pid: u32) -> Result<(), String> {
-    use sysinfo::{Pid, ProcessRefreshKind};
+    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate};
 
     // sysinfo refresh is blocking; run on a worker thread.
     let pid_usize = pid as usize;
     let killed = tokio::task::spawn_blocking(move || -> Result<bool, String> {
         let mut sys = sysinfo::System::new();
-        // sysinfo 0.32.x signature: `(remove_dead_processes: bool, refresh_kind: ProcessRefreshKind)`.
+        // sysinfo 0.32.x signature:
+        //   refresh_processes_specifics(ProcessesToUpdate, refresh_users: bool, ProcessRefreshKind)
         // We only need the process table populated enough to find the PID,
-        // so use a no-op refresh kind (we don't need cpu/memory stats — we
-        // just want to look up the process and kill it).
-        sys.refresh_processes_specifics(true, ProcessRefreshKind::nothing());
+        // so use a no-op refresh kind (we don't need cpu/memory stats).
+        sys.refresh_processes_specifics(
+            ProcessesToUpdate::All,
+            true,
+            ProcessRefreshKind::new(),
+        );
         match sys.process(Pid::from_u32(pid)) {
             Some(proc) => {
                 // `Process::kill` on sysinfo 0.32 sends the platform's
@@ -222,7 +226,8 @@ pub async fn open_external(app: AppHandle, url: String) -> Result<(), String> {
         ));
     }
     app.shell()
-        .open(url, None)
+        .open(url, None)  // deprecated in tauri-plugin-shell 2.x but functional;
+                          // migrate to tauri-plugin-opener in a future release.
         .map_err(|e| format!("Failed to open URL: {}", e))
 }
 
