@@ -338,7 +338,7 @@ struct OllamaGenerateRequest {
 
 /// A single chat message for the Ollama /api/chat endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct OllamaChatMessage {
+pub struct OllamaChatMessage {
     role: String,
     content: String,
 }
