@@ -14,7 +14,7 @@ use crate::model::{
     ModelState, InferenceSettings, LoadModelResult, ModelConfig,
     ModelInfo,
     load_gguf_model, create_loaded_model,
-    generate_text_async, generate_text_streaming,
+    generate_text_async, generate_text_streaming_with_messages,
     scan_directory_for_models, get_default_model_dirs,
     check_ollama_status, pull_model,
     extract_model_name, extract_parameters, extract_quantization

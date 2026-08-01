@@ -670,7 +670,7 @@ pub async fn generate_text_streaming(
                                     let speed = token_count as f64 / elapsed.as_secs_f64().max(0.001);
 
                                     on_token(GenerationProgress::token(
-                                        token.clone(),
+                                        token.to_string(),
                                         token_count,
                                         speed,
                                     ));
@@ -756,7 +756,7 @@ pub async fn generate_text_streaming(
 /// We always prepend the CodeMate system prompt so the model knows its
 /// identity + rules. If the frontend later sends structured history, this
 /// function can be extended to parse it.
-fn parse_prompt_into_messages(prompt: &str) -> Vec<OllamaChatMessage> {
+pub fn parse_prompt_into_messages(prompt: &str) -> Vec<OllamaChatMessage> {
     let mut messages = Vec::new();
 
     // System prompt — gives the model its identity as CodeMate.
