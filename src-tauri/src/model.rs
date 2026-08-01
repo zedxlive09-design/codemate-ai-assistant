@@ -13,6 +13,22 @@ use futures_util::StreamExt;
 /// Default Ollama API endpoint
 pub const OLLAMA_BASE_URL: &str = "http://localhost:11434";
 
+/// The system prompt that gives the model its identity as "CodeMate" and
+/// sets the rules for how it should respond. Without this, the model has no
+/// context and produces random/garbage output (e.g. responding in the wrong
+/// language, ignoring coding instructions, etc.).
+pub const CODEMATE_SYSTEM_PROMPT: &str = r#"You are CodeMate, an expert AI coding assistant. You help developers write, debug, understand, and optimize code.
+
+RULES:
+1. Always respond in English unless the user explicitly writes in another language.
+2. You are a coding assistant — focus on programming, software development, and technical topics.
+3. When writing code, always wrap it in fenced code blocks with the language specified, e.g. ```html or ```typescript.
+4. When the user asks you to "create a file" or "make a file", output the COMPLETE file content in a single code block so it can be saved.
+5. Be concise but thorough. Don't add unnecessary filler.
+6. If the user says "continue", continue your previous response from where it left off — do not start a new topic or switch languages.
+7. Follow the user's instructions exactly. If they ask for an HTML file with cart, payment, and admin panel, provide ALL of it in the code.
+8. Never refuse a reasonable coding request. Always provide the code."#;
+
 /// Main model state holder - stored in Tauri managed state
 #[derive(Default)]
 pub struct ModelState {
@@ -250,6 +266,26 @@ struct OllamaGenerateRequest {
     raw: Option<bool>,
 }
 
+/// A single chat message for the Ollama /api/chat endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct OllamaChatMessage {
+    role: String,
+    content: String,
+}
+
+/// Request body for Ollama /api/chat endpoint (supports system prompt +
+/// multi-turn conversation history, unlike /api/generate which is
+/// single-prompt-only).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct OllamaChatRequest {
+    model: String,
+    messages: Vec<OllamaChatMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stream: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    options: Option<OllamaGenerateOptions>,
+}
+
 /// Options for generation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct OllamaGenerateOptions {
@@ -282,6 +318,8 @@ impl From<&InferenceSettings> for OllamaGenerateOptions {
 struct OllamaStreamResponse {
     #[serde(default)]
     response: Option<String>,
+    #[serde(default)]
+    message: Option<OllamaChatMessage>,
     #[serde(default)]
     done: bool,
     #[serde(default)]
@@ -410,23 +448,25 @@ pub async fn generate_text_async(
     if prompt.is_empty() {
         return Err("Prompt cannot be empty".to_string());
     }
-    
+
     let start_time = std::time::Instant::now();
-    
-    log::info!(target: "inference", "Starting generation with Ollama, model: {}, temp={}", 
+
+    log::info!(target: "inference", "Starting generation with Ollama (chat API), model: {}, temp={}",
               model.path, settings.temperature);
-    
-    let request = OllamaGenerateRequest {
+
+    // Use /api/chat with system prompt (same as streaming version).
+    let messages = parse_prompt_into_messages(prompt);
+
+    let request = OllamaChatRequest {
         model: model.path.clone(),
-        prompt: prompt.to_string(),
+        messages,
         stream: Some(false),
         options: Some(OllamaGenerateOptions::from(settings)),
-        raw: Some(true),
     };
-    
+
     let client = reqwest::Client::new();
-    let url = format!("{}/api/generate", OLLAMA_BASE_URL);
-    
+    let url = format!("{}/api/chat", OLLAMA_BASE_URL);
+
     match client.post(&url).json(&request).send().await {
         Ok(response) => {
             if !response.status().is_success() {
@@ -434,21 +474,23 @@ pub async fn generate_text_async(
                 let body = response.text().await.unwrap_or_default();
                 return Err(format!("Ollama API error {}: {}", status, body));
             }
-            
+
             let ollama_response: serde_json::Value = response.json().await
                 .map_err(|e| format!("Failed to parse response: {}", e))?;
-            
-            let text = ollama_response.get("response")
+
+            // /api/chat returns { message: { content: "..." } } (not { response: "..." }).
+            let text = ollama_response.get("message")
+                .and_then(|m| m.get("content"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
-            
+
             let elapsed = start_time.elapsed();
             let speed = text.split_whitespace().count() as f64 / elapsed.as_secs_f64().max(0.001);
-            
-            log::info!(target: "inference", "Generation complete in {:.2}s ({:.1} words/s)", 
+
+            log::info!(target: "inference", "Generation complete in {:.2}s ({:.1} words/s)",
                       elapsed.as_secs_f64(), speed);
-            
+
             Ok(text)
         }
         Err(e) => Err(format!("Failed to connect to Ollama: {}. Is Ollama running?", e))
@@ -465,23 +507,34 @@ pub async fn generate_text_streaming(
     if prompt.is_empty() {
         return Err("Prompt cannot be empty".to_string());
     }
-    
+
     let start_time = std::time::Instant::now();
     let mut generated_text = String::new();
     let mut token_count: u32 = 0;
-    
-    log::info!(target: "inference", "Starting streaming generation with Ollama");
-    
-    let request = OllamaGenerateRequest {
+
+    log::info!(target: "inference", "Starting streaming generation with Ollama (chat API)");
+
+    // Use the /api/chat endpoint (not /api/generate) so we can send a
+    // system prompt + multi-turn conversation history. The /api/generate
+    // endpoint is single-prompt-only with no system prompt support, which
+    // caused the model to produce garbage (wrong language, ignoring
+    // instructions) because it had zero context about being CodeMate.
+    //
+    // The `prompt` parameter from the frontend is actually the FULL
+    // conversation text (built by ChatInput), but for the chat API we
+    // parse it into messages. If parsing fails, we fall back to a single
+    // user message.
+    let messages = parse_prompt_into_messages(prompt);
+
+    let request = OllamaChatRequest {
         model: model.path.clone(),
-        prompt: prompt.to_string(),
+        messages,
         stream: Some(true),
         options: Some(OllamaGenerateOptions::from(settings)),
-        raw: Some(true),
     };
-    
+
     let client = reqwest::Client::new();
-    let url = format!("{}/api/generate", OLLAMA_BASE_URL);
+    let url = format!("{}/api/chat", OLLAMA_BASE_URL);
     
     match client.post(&url).json(&request).send().await {
         Ok(response) => {
@@ -523,7 +576,15 @@ pub async fn generate_text_streaming(
                                     return Err(format!("Ollama error: {}", error));
                                 }
 
-                                if let Some(token) = chunk_data.response {
+                                // The /api/chat endpoint returns tokens in
+                                // `message.content` (not `response`). Fall
+                                // back to `response` for safety (in case
+                                // Ollama changes or we revert to /api/generate).
+                                let token = chunk_data.message.as_ref()
+                                    .and_then(|m| if m.content.is_empty() { None } else { Some(m.content.as_str()) })
+                                    .or(chunk_data.response.as_deref());
+
+                                if let Some(token) = token {
                                     token_count += 1;
                                     generated_text.push_str(&token);
 
@@ -574,12 +635,15 @@ pub async fn generate_text_streaming(
                         on_token(GenerationProgress::error(&error));
                         return Err(format!("Ollama error: {}", error));
                     }
-                    if let Some(token) = chunk_data.response {
+                    if let Some(token) = chunk_data.message.as_ref()
+                        .and_then(|m| if m.content.is_empty() { None } else { Some(m.content.as_str()) })
+                        .or(chunk_data.response.as_deref())
+                    {
                         token_count += 1;
                         generated_text.push_str(&token);
                         let elapsed = start_time.elapsed();
                         let speed = token_count as f64 / elapsed.as_secs_f64().max(0.001);
-                        on_token(GenerationProgress::token(token, token_count, speed));
+                        on_token(GenerationProgress::token(token.to_string(), token_count, speed));
                     }
                     if chunk_data.done {
                         let elapsed = start_time.elapsed();
@@ -605,6 +669,31 @@ pub async fn generate_text_streaming(
             Err(err_msg)
         }
     }
+}
+
+/// Parse the `prompt` string (sent by the frontend) into a list of
+/// OllamaChatMessage suitable for the /api/chat endpoint.
+///
+/// The frontend currently sends the raw user text (not conversation history).
+/// We always prepend the CodeMate system prompt so the model knows its
+/// identity + rules. If the frontend later sends structured history, this
+/// function can be extended to parse it.
+fn parse_prompt_into_messages(prompt: &str) -> Vec<OllamaChatMessage> {
+    let mut messages = Vec::new();
+
+    // System prompt — gives the model its identity as CodeMate.
+    messages.push(OllamaChatMessage {
+        role: "system".to_string(),
+        content: CODEMATE_SYSTEM_PROMPT.to_string(),
+    });
+
+    // The user's message.
+    messages.push(OllamaChatMessage {
+        role: "user".to_string(),
+        content: prompt.to_string(),
+    });
+
+    messages
 }
 
 /// Synchronous wrapper for non-streaming generation (delegates to async version)
