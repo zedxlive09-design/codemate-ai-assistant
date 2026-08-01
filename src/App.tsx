@@ -655,45 +655,15 @@ export default function App() {
               </span>
             </div>
 
-            {/* Toolbar — hidden while in focus mode (keep only logo + title). */}
+            {/* Toolbar — hidden while in focus mode. Reduced to 5 core buttons;
+                all other panels are accessible via Ctrl+K (Command Palette). */}
             {!focusMode && (
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
-              {/* Core Panels */}
+            <div className="flex items-center gap-1">
               <ToolbarButton icon={<FileIcon />} label="Files" active={showFileExplorer} onClick={toggleFileExplorer} shortcut="Ctrl+E" color="yellow" />
               <ToolbarButton icon={<TerminalIcon />} label="Terminal" active={showTerminal} onClick={toggleTerminal} shortcut="Ctrl+`" color="slate" />
-              <ToolbarButton icon={<SettingsIcon />} label="Settings" active={showSettings} onClick={toggleSettings} shortcut="Ctrl+," color="gray" />
-              
-              <div className="w-px h-6 bg-slate-700 mx-1" />
-              
-              {/* AI & Code Panels */}
               <ToolbarButton icon={<ModelIcon />} label="Models" active={showModelManager} onClick={toggleModelManager} shortcut="Ctrl+M" color="violet" />
-              <ToolbarButton icon={<CodeIcon />} label="Editor" active={showCodeEditor} onClick={toggleCodeEditor} shortcut="Ctrl+I" color="blue" />
-              <ToolbarButton icon={<SnippetIcon />} label="Snippets" active={showSnippetsPanel} onClick={toggleSnippetsPanel} shortcut="Ctrl+Shift+S" color="amber" />
-              <ToolbarButton icon={<GitIcon />} label="Git" active={showGitPanel} onClick={toggleGitPanel} shortcut="Ctrl+Shift+G" color="orange" />
-              
-              <div className="w-px h-6 bg-slate-700 mx-1" />
-              
-              {/* Enhancement Panels */}
               <ToolbarButton icon={<ThemeIcon />} label="Theme" active={showThemeCustomizer} onClick={toggleThemeCustomizer} shortcut="Ctrl+Shift+T" color="pink" />
-              <ToolbarButton icon={<QuickActionIcon />} label="Actions" active={showQuickActions} onClick={toggleQuickActions} shortcut="Ctrl+Shift+Q" color="emerald" />
-              <ToolbarButton icon={<PluginIcon />} label="Plugins" active={showPluginManager} onClick={togglePluginManager} shortcut="Ctrl+Shift+P" color="purple" />
-              <ToolbarButton icon={<AIConfigIcon />} label="AI Config" active={showAISettings} onClick={toggleAISettings} shortcut="Ctrl+Shift+," color="cyan" />
-              
-              <div className="w-px h-6 bg-slate-700 mx-1" />
-              
-              {/* Data & Misc Panels */}
-              <ToolbarButton icon={<ActivityIcon />} label="Activity" active={showActivityPanel} onClick={toggleActivityPanel} shortcut="Ctrl+Shift+A" color="green" />
-              <ToolbarButton icon={<ChatIcon />} label="Chats" active={showConversationManager} onClick={toggleConversationManager} shortcut="Ctrl+E" color="teal" />
-              <ToolbarButton icon={<BookmarkIcon />} label="Bookmarks" active={showBookmarks} onClick={toggleBookmarks} shortcut="Ctrl+Shift+B" color="rose" />
-              <ToolbarButton icon={<MicIcon />} label="Voice" active={showVoiceInput} onClick={toggleVoiceInput} shortcut="Alt+Ctrl+V" color="red" />
-
-              <div className="w-px h-6 bg-slate-700 mx-1" />
-              
-              {/* Phase 6 New Panels */}
-              <ToolbarButton icon={<DownloadIcon />} label="Downloads" active={showDownloadModal} onClick={() => setShowDownloadModal(true)} shortcut="Ctrl+Shift+D" color="indigo" />
-              <ToolbarButton icon={<NotificationIcon />} label="Alerts" active={showNotificationModal} onClick={() => setShowNotificationModal(true)} shortcut="Ctrl+Shift+N" color="fuchsia" />
-              <ToolbarButton icon={<StatsIcon />} label="Stats" active={showStatsPanel} onClick={toggleStatsPanel} shortcut="Alt+Ctrl+S" color="lime" />
-              <ToolbarButton icon={<ProfileIcon />} label="Profile" active={showProfilePanel} onClick={toggleProfilePanel} shortcut="Alt+Ctrl+P" color="sky" />
+              <ToolbarButton icon={<SettingsIcon />} label="Settings" active={showSettings} onClick={toggleSettings} shortcut="Ctrl+," color="gray" />
             </div>
             )}
 
@@ -724,7 +694,7 @@ export default function App() {
           </header>
 
           {/* Main Chat Area */}
-          <main className="flex-1 overflow-hidden relative">
+          <main className="flex-1 overflow-hidden relative flex flex-col min-h-0">
             <ChatArea />
 
             {/* Feature Showcase Overlay — only when there's no active
