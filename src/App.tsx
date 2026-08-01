@@ -35,6 +35,8 @@ import { getPresetById } from './lib/themePresets';
 import { useCommandPalette } from './components/CommandPalette';
 import { useKeyboardShortcuts } from './components/KeyboardShortcuts';
 import FocusMode from './components/FocusMode';
+import { isTauri } from './lib/isTauri';
+import { modelCommands } from './lib/tauri';
 
 // Lazy-load the heavier modals so their code is fetched only when first
 // opened, keeping the initial entry chunk smaller. The named event-bus
@@ -98,7 +100,10 @@ export default function App() {
     pinnedConversationIds,
     renameConversation,
     duplicateConversation,
-    archiveConversation
+    archiveConversation,
+    selectedModelId,
+    modelLoaded,
+    setModelLoaded
   } = useStore();
 
   const { isOpen: isPaletteOpen, setIsOpen: setIsPaletteOpen } = useCommandPalette();
@@ -262,6 +267,44 @@ export default function App() {
 
   // Apply + persist the visual theme (CSS --cm-* vars + data-theme attribute).
   const { cycleTheme } = useTheme();
+
+  // Auto-reload the model on startup. After a Tauri dev-server restart
+  // (which happens every time Rust code changes), the backend's ModelState
+  // is lost (it's in-memory). The frontend's `modelLoaded` flag is also not
+  // persisted, so it resets to false — which causes the app to fall through
+  // to DEMO mode even though the user had a model loaded. This effect checks
+  // if the model is still loaded in the backend; if not but a selectedModelId
+  // exists, it tries to reload it automatically.
+  useEffect(() => {
+    if (!isTauri) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const isLoaded = await modelCommands.isModelLoaded();
+        if (cancelled) return;
+        if (isLoaded) {
+          // Model is still loaded in the backend — sync the frontend state.
+          setModelLoaded(true);
+        } else if (selectedModelId) {
+          // Model was selected but isn't loaded in the backend (probably
+          // after a restart). Try to reload it.
+          console.log('[App] Model not loaded in backend, attempting auto-reload of:', selectedModelId);
+          const result = await modelCommands.loadModel(selectedModelId);
+          if (cancelled) return;
+          if (result.success) {
+            setModelLoaded(true);
+            console.log('[App] Auto-reload successful:', result.message);
+          } else {
+            setModelLoaded(false);
+            console.warn('[App] Auto-reload failed:', result.message);
+          }
+        }
+      } catch (e) {
+        console.warn('[App] Model status check failed:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Voice input transcript handler
   const handleVoiceTranscript = useCallback((text: string) => {
