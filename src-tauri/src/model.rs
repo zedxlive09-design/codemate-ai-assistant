@@ -14,20 +14,90 @@ use futures_util::StreamExt;
 pub const OLLAMA_BASE_URL: &str = "http://localhost:11434";
 
 /// The system prompt that gives the model its identity as "CodeMate" and
-/// sets the rules for how it should respond. Without this, the model has no
-/// context and produces random/garbage output (e.g. responding in the wrong
-/// language, ignoring coding instructions, etc.).
-pub const CODEMATE_SYSTEM_PROMPT: &str = r#"You are CodeMate, an expert AI coding assistant. You help developers write, debug, understand, and optimize code.
+/// sets the rules for how it should respond. This is optimized for
+/// "lazy prompting" — when the user gives a short/vague prompt, the system
+/// prompt provides enough context for the model to produce a useful response.
+///
+/// Designed to work well with smaller models (7B-13B) like Qwen2.5-Coder
+/// that need clear, structured instructions to follow.
+pub const CODEMATE_SYSTEM_PROMPT: &str = r#"You are CodeMate, an expert AI coding assistant running locally on the user's machine. You help developers write, debug, understand, and optimize code.
 
-RULES:
-1. Always respond in English unless the user explicitly writes in another language.
-2. You are a coding assistant — focus on programming, software development, and technical topics.
-3. When writing code, always wrap it in fenced code blocks with the language specified, e.g. ```html or ```typescript.
-4. When the user asks you to "create a file" or "make a file", output the COMPLETE file content in a single code block so it can be saved.
-5. Be concise but thorough. Don't add unnecessary filler.
-6. If the user says "continue", continue your previous response from where it left off — do not start a new topic or switch languages.
-7. Follow the user's instructions exactly. If they ask for an HTML file with cart, payment, and admin panel, provide ALL of it in the code.
-8. Never refuse a reasonable coding request. Always provide the code."#;
+## IDENTITY
+- Name: CodeMate
+- Role: Expert programming assistant
+- Expertise: All major programming languages, frameworks, databases, DevOps, and system design
+- Tone: Professional, concise, helpful, and direct. No filler. No disclaimers. Get to the point.
+
+## LANGUAGE RULES
+- Respond in the SAME language the user writes in.
+- If the user writes in English → respond in English.
+- If the user writes in Urdu/Hindi (roman) → respond in English but you may use simple Urdu/Hindi words to explain concepts if it helps.
+- If the user writes in any other language → respond in that language.
+- NEVER switch languages mid-conversation unless the user asks.
+- NEVER respond in a random language the user didn't use.
+
+## LAZY PROMPTING SUPPORT
+The user may give short, vague, or incomplete prompts. Always interpret them charitably and produce useful output:
+- "continue" = continue your previous response from where it stopped. Pick up exactly where you left off. Do NOT start a new topic, do NOT switch languages, do NOT repeat what you already said.
+- "fix it" or "fix" = fix bugs/errors in the code that was just discussed.
+- "explain" = explain the code/concept that was just discussed.
+- "make it better" or "optimize" = improve the code that was just discussed.
+- "test" or "tests" = write unit tests for the code that was just discussed.
+- "again" or "retry" = regenerate your previous response with a different approach.
+- Short one-word or two-word prompts about a technology (e.g. "react hooks", "docker", "sql join") = give a concise explanation with a code example.
+- "create [X]" or "make [X]" where X is a project/app/website = generate the COMPLETE code for X. Don't give a skeleton or placeholder — give working code.
+
+## CODE GENERATION RULES
+1. ALWAYS wrap code in fenced code blocks with the language specified:
+   ```html
+   <!-- HTML here -->
+   ```
+   ```typescript
+   // TypeScript here
+   ```
+
+2. When the user asks you to "create a file", "make a file", "generate a file", or similar — output the COMPLETE file content in a SINGLE code block. The user has a "Save" button that saves the code block to disk. Do NOT split into multiple blocks. Do NOT use placeholders like "// ... rest of the code ...". Give the FULL working file.
+
+3. When the user asks for a project/website/app with multiple features (e.g. "ecommerce site with cart, payment, admin panel") — provide ALL the requested features in the code. Do not say "you can add this later" or "this is left as an exercise". If the request is large, put everything in one file if possible, or clearly separate multiple files with comments like `// file: index.html` and `// file: styles.css`.
+
+4. Code must be WORKING and COMPLETE. No `// TODO`, no `// implement this`, no `// your code here`. Every function must have a real implementation.
+
+5. Use modern best practices:
+   - HTML: semantic tags, responsive meta viewport, accessible labels
+   - CSS: flexbox/grid, CSS variables, mobile-first responsive design
+   - JavaScript: ES6+, async/await, proper error handling
+   - Python: type hints, PEP 8
+   - TypeScript: strict types, no `any` unless unavoidable
+
+6. Include comments in code only when the logic is non-obvious. Don't over-comment.
+
+## RESPONSE FORMAT
+- Start with a 1-line summary of what you're providing.
+- Then give the code (in a fenced block with language).
+- Then a brief explanation (2-5 lines) of key decisions or how to use it.
+- If there are multiple files, list them: "**Files created:** index.html, styles.css, script.js"
+
+## WHAT NOT TO DO
+- Do NOT refuse a reasonable coding request. Always provide code.
+- Do NOT say "I can't do this" or "This is too complex" — break it down and provide what you can.
+- Do NOT give partial code with placeholders. Give complete, working code.
+- Do NOT switch languages randomly (no Polish, no random non-English text unless the user wrote in that language).
+- Do NOT repeat the user's prompt back to them.
+- Do NOT add excessive disclaimers, warnings, or "note that..." filler.
+- Do NOT use phrases like "As an AI..." or "I'd be happy to help..." — just help.
+- Do NOT ask "Would you like me to..." — just do it.
+
+## DEBUGGING
+When helping with errors:
+1. State the error clearly.
+2. Explain the root cause in 1-2 lines.
+3. Give the fixed code in a code block.
+4. One-line prevention tip if relevant.
+
+## CONTEXT AWARENESS
+- You may receive conversation history. Use it to understand what code the user is referring to.
+- If the user says "this", "it", "that code", "the function" — they mean the code from the most recent message.
+- If there's no previous context and the prompt is vague, make a reasonable assumption and proceed."#;
 
 /// Main model state holder - stored in Tauri managed state
 #[derive(Default)]
@@ -271,6 +341,14 @@ struct OllamaGenerateRequest {
 struct OllamaChatMessage {
     role: String,
     content: String,
+}
+
+/// Input from the frontend — a single message in the conversation history.
+/// This is what the Tauri command receives from the React side.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatMessageInput {
+    pub role: String,
+    pub content: String,
 }
 
 /// Request body for Ollama /api/chat endpoint (supports system prompt +
@@ -694,6 +772,174 @@ fn parse_prompt_into_messages(prompt: &str) -> Vec<OllamaChatMessage> {
     });
 
     messages
+}
+
+/// Build the messages array from the frontend's conversation history.
+/// Prepends the CodeMate system prompt, then maps each ChatMessageInput
+/// to an OllamaChatMessage. Trims long conversations to the last ~20
+/// messages to stay within the model's context window.
+pub fn build_messages_from_history(
+    _prompt: &str,
+    history: &[ChatMessageInput],
+) -> Vec<OllamaChatMessage> {
+    let mut messages = Vec::new();
+
+    // System prompt — always first.
+    messages.push(OllamaChatMessage {
+        role: "system".to_string(),
+        content: CODEMATE_SYSTEM_PROMPT.to_string(),
+    });
+
+    // Take the last 20 messages to avoid exceeding context windows on
+    // smaller models (7B models often have 4K-8K context).
+    let max_history = 20;
+    let start = if history.len() > max_history {
+        history.len() - max_history
+    } else {
+        0
+    };
+
+    for msg in &history[start..] {
+        // Map frontend roles to Ollama roles. The frontend uses
+        // "user" / "assistant" / "system" which map directly.
+        let role = match msg.role.as_str() {
+            "user" => "user",
+            "assistant" => "assistant",
+            "system" => "system",
+            _ => "user", // default to user for unknown roles
+        };
+
+        // Skip empty messages (e.g. the placeholder assistant message
+        // that ChatInput creates before generation starts).
+        if msg.content.is_empty() {
+            continue;
+        }
+
+        messages.push(OllamaChatMessage {
+            role: role.to_string(),
+            content: msg.content.clone(),
+        });
+    }
+
+    messages
+}
+
+/// Generate text using Ollama /api/chat with streaming, using a pre-built
+/// messages array (system prompt + conversation history).
+pub async fn generate_text_streaming_with_messages(
+    messages: &[OllamaChatMessage],
+    settings: &InferenceSettings,
+    model: &LoadedModel,
+    mut on_token: impl FnMut(GenerationProgress) -> () + Send + 'static,
+) -> Result<String, String> {
+    let start_time = std::time::Instant::now();
+    let mut generated_text = String::new();
+    let mut token_count: u32 = 0;
+
+    log::info!(target: "inference", "Starting streaming generation with Ollama (chat API), {} messages", messages.len());
+
+    let request = OllamaChatRequest {
+        model: model.path.clone(),
+        messages: messages.to_vec(),
+        stream: Some(true),
+        options: Some(OllamaGenerateOptions::from(settings)),
+    };
+
+    let client = reqwest::Client::new();
+    let url = format!("{}/api/chat", OLLAMA_BASE_URL);
+
+    match client.post(&url).json(&request).send().await {
+        Ok(response) => {
+            if !response.status().is_success() {
+                let status = response.status();
+                let body = response.text().await.unwrap_or_default();
+                on_token(GenerationProgress::error(&format!("Ollama API error {}: {}", status, body)));
+                return Err(format!("Ollama API error {}: {}", status, body));
+            }
+
+            let mut stream = response.bytes_stream();
+            let mut buf = String::new();
+
+            while let Some(chunk_result) = stream.next().await {
+                match chunk_result {
+                    Ok(bytes) => {
+                        buf.push_str(&String::from_utf8_lossy(&bytes));
+
+                        while let Some(idx) = buf.find('\n') {
+                            let line: String = buf.drain(..=idx).collect();
+                            let line = line.trim();
+                            if line.is_empty() { continue; }
+
+                            if let Ok(chunk_data) = serde_json::from_str::<OllamaStreamResponse>(line) {
+                                if let Some(error) = chunk_data.error {
+                                    on_token(GenerationProgress::error(&error));
+                                    return Err(format!("Ollama error: {}", error));
+                                }
+
+                                let token = chunk_data.message.as_ref()
+                                    .and_then(|m| if m.content.is_empty() { None } else { Some(m.content.as_str()) })
+                                    .or(chunk_data.response.as_deref());
+
+                                if let Some(token) = token {
+                                    token_count += 1;
+                                    generated_text.push_str(&token);
+                                    let elapsed = start_time.elapsed();
+                                    let speed = token_count as f64 / elapsed.as_secs_f64().max(0.001);
+                                    on_token(GenerationProgress::token(token.to_string(), token_count, speed));
+                                }
+
+                                if chunk_data.done {
+                                    let elapsed = start_time.elapsed();
+                                    let final_speed = token_count as f64 / elapsed.as_secs_f64().max(0.001);
+                                    on_token(GenerationProgress::complete(token_count, &generated_text, final_speed));
+                                    log::info!(target: "inference", "Streaming complete: {} tokens in {:.2}s", token_count, elapsed.as_secs_f64());
+                                    return Ok(generated_text);
+                                }
+                            } else {
+                                log::warn!(target: "inference", "Failed to parse stream line: {}", line);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!(target: "inference", "Stream chunk error: {}", e);
+                    }
+                }
+            }
+
+            // Drain trailing partial line.
+            let trailing = buf.trim();
+            if !trailing.is_empty() {
+                if let Ok(chunk_data) = serde_json::from_str::<OllamaStreamResponse>(trailing) {
+                    if let Some(token) = chunk_data.message.as_ref()
+                        .and_then(|m| if m.content.is_empty() { None } else { Some(m.content.as_str()) })
+                        .or(chunk_data.response.as_deref())
+                    {
+                        token_count += 1;
+                        generated_text.push_str(&token);
+                        let elapsed = start_time.elapsed();
+                        let speed = token_count as f64 / elapsed.as_secs_f64().max(0.001);
+                        on_token(GenerationProgress::token(token.to_string(), token_count, speed));
+                    }
+                    if chunk_data.done {
+                        let elapsed = start_time.elapsed();
+                        let final_speed = token_count as f64 / elapsed.as_secs_f64().max(0.001);
+                        on_token(GenerationProgress::complete(token_count, &generated_text, final_speed));
+                        return Ok(generated_text);
+                    }
+                }
+            }
+
+            let elapsed = start_time.elapsed();
+            let final_speed = token_count as f64 / elapsed.as_secs_f64().max(0.001);
+            on_token(GenerationProgress::complete(token_count, &generated_text, final_speed));
+            Ok(generated_text)
+        }
+        Err(e) => {
+            let err_msg = format!("Failed to connect to Ollama: {}. Is Ollama running? Start with: ollama serve", e);
+            on_token(GenerationProgress::error(&err_msg));
+            Err(err_msg)
+        }
+    }
 }
 
 /// Synchronous wrapper for non-streaming generation (delegates to async version)

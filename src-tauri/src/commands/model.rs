@@ -186,14 +186,21 @@ pub async fn generate(
 }
 
 /// Generate with streaming - emits tokens via Tauri events
+///
+/// `messages` is an optional array of {role, content} objects representing
+/// the conversation history. If provided, it's used directly (with the
+/// CodeMate system prompt prepended). If not, `prompt` is used as a
+/// single user message (backward compat).
 #[tauri::command]
 pub async fn generate_streaming(
     prompt: String,
     settings: Option<InferenceSettings>,
+    messages: Option<Vec<crate::model::ChatMessageInput>>,
     state: State<'_, Mutex<ModelState>>,
     app: AppHandle,
 ) -> Result<String, String> {
-    log::info!(target: "command", "generate_streaming called, prompt length: {}", prompt.len());
+    log::info!(target: "command", "generate_streaming called, prompt length: {}, has_messages: {}",
+              prompt.len(), messages.is_some());
     
     let model = {
         let mut state = state.lock().map_err(|e| e.to_string())?;
@@ -213,8 +220,16 @@ pub async fn generate_streaming(
     
     let settings = settings.unwrap_or_default();
     let app_clone = app.clone();
-    
-    generate_text_streaming(&prompt, &settings, &model, move |progress| {
+
+    // Build the messages array: if the frontend sent structured conversation
+    // history, use it; otherwise fall back to the single-prompt path.
+    let chat_messages = if let Some(msgs) = messages {
+        crate::model::build_messages_from_history(&prompt, &msgs)
+    } else {
+        crate::model::parse_prompt_into_messages(&prompt)
+    };
+
+    generate_text_streaming_with_messages(&chat_messages, &settings, &model, move |progress| {
         if progress.is_error {
             let _ = app_clone.emit(EVENT_GENERATION_ERROR, serde_json::json!({
                 "message": progress.error_message.unwrap_or_else(|| "Unknown error".to_string())

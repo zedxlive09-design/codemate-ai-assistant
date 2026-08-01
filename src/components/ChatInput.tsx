@@ -320,8 +320,25 @@ This is a **demo response** - I'm simulating what the AI would say.
         threads: inferenceSettings.threads,
       };
 
-      // Call the streaming generation command
-      await modelCommands.generateStreaming(prompt, settings);
+      // Build conversation history for multi-turn context.
+      // This lets the model understand "continue", "fix it", "explain",
+      // etc. by seeing the previous messages. We send all messages EXCEPT
+      // the empty assistant placeholder (the last one) — the backend
+      // skips empty messages anyway, but this avoids sending it.
+      const currentState = useStore.getState();
+      const currentConv = currentState.conversations.find(c => c.id === conversationId);
+      const historyMessages = currentConv
+        ? currentConv.messages
+            // Exclude the empty assistant placeholder at the end.
+            .filter((m, idx) => !(idx === currentConv.messages.length - 1 && m.content === ''))
+            .map(m => ({
+              role: m.role === 'user' ? 'user' : m.role === 'assistant' ? 'assistant' : 'system',
+              content: m.content,
+            }))
+        : [];
+
+      // Call the streaming generation command with conversation history.
+      await modelCommands.generateStreaming(prompt, settings, historyMessages);
     } finally {
       // Clean up all listeners (fire-and-forget; they return Promises).
       unlistenToken();

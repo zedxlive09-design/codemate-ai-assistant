@@ -310,15 +310,22 @@ export const modelCommands = {
   /**
    * Stream generation - emits events for each token.
    * Listen to 'model:generation-token', 'model:generation-complete', 'model:generation-error'
+   *
+   * `messages` is an optional array of {role, content} representing the
+   * conversation history. When provided, the backend sends it to Ollama's
+   * /api/chat endpoint with the CodeMate system prompt prepended, enabling
+   * multi-turn context (so "continue", "fix it", etc. work properly).
    */
   generateStreaming: async (
     prompt: string,
-    settings?: Partial<InferenceSettings>
+    settings?: Partial<InferenceSettings>,
+    messages?: Array<{ role: string; content: string }>
   ): Promise<string> => {
     if (!isTauri) return mockModelCommands.generateStreaming(prompt);
     return invoke<string>('generate_streaming', {
       prompt,
       settings: settings || {},
+      messages: messages || null,
     });
   },
 
