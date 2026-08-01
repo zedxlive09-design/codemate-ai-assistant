@@ -870,25 +870,35 @@ pub async fn generate_text_streaming_with_messages(
                             let line = line.trim();
                             if line.is_empty() { continue; }
 
-                            if let Ok(chunk_data) = serde_json::from_str::<OllamaStreamResponse>(line) {
-                                if let Some(error) = chunk_data.error {
-                                    on_token(GenerationProgress::error(&error));
+                            // Parse as raw JSON Value — more robust than typed
+                            // struct deserialization (avoids any field-visibility
+                            // or struct-matching issues that caused empty responses).
+                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
+                                // Check for error.
+                                if let Some(error) = json.get("error").and_then(|v| v.as_str()) {
+                                    on_token(GenerationProgress::error(error));
                                     return Err(format!("Ollama error: {}", error));
                                 }
 
-                                let token = chunk_data.message.as_ref()
-                                    .and_then(|m| if m.content.is_empty() { None } else { Some(m.content.as_str()) })
-                                    .or(chunk_data.response.as_deref());
+                                // Extract token text from either:
+                                // - /api/chat: message.content
+                                // - /api/generate: response
+                                let token = json.get("message")
+                                    .and_then(|m| m.get("content"))
+                                    .and_then(|v| v.as_str())
+                                    .filter(|s| !s.is_empty())
+                                    .or_else(|| json.get("response").and_then(|v| v.as_str()).filter(|s| !s.is_empty()));
 
                                 if let Some(token) = token {
                                     token_count += 1;
-                                    generated_text.push_str(&token);
+                                    generated_text.push_str(token);
                                     let elapsed = start_time.elapsed();
                                     let speed = token_count as f64 / elapsed.as_secs_f64().max(0.001);
                                     on_token(GenerationProgress::token(token.to_string(), token_count, speed));
                                 }
 
-                                if chunk_data.done {
+                                // Check for done.
+                                if json.get("done").and_then(|v| v.as_bool()).unwrap_or(false) {
                                     let elapsed = start_time.elapsed();
                                     let final_speed = token_count as f64 / elapsed.as_secs_f64().max(0.001);
                                     on_token(GenerationProgress::complete(token_count, &generated_text, final_speed));
@@ -909,18 +919,21 @@ pub async fn generate_text_streaming_with_messages(
             // Drain trailing partial line.
             let trailing = buf.trim();
             if !trailing.is_empty() {
-                if let Ok(chunk_data) = serde_json::from_str::<OllamaStreamResponse>(trailing) {
-                    if let Some(token) = chunk_data.message.as_ref()
-                        .and_then(|m| if m.content.is_empty() { None } else { Some(m.content.as_str()) })
-                        .or(chunk_data.response.as_deref())
-                    {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(trailing) {
+                    let token = json.get("message")
+                        .and_then(|m| m.get("content"))
+                        .and_then(|v| v.as_str())
+                        .filter(|s| !s.is_empty())
+                        .or_else(|| json.get("response").and_then(|v| v.as_str()).filter(|s| !s.is_empty()));
+
+                    if let Some(token) = token {
                         token_count += 1;
-                        generated_text.push_str(&token);
+                        generated_text.push_str(token);
                         let elapsed = start_time.elapsed();
                         let speed = token_count as f64 / elapsed.as_secs_f64().max(0.001);
                         on_token(GenerationProgress::token(token.to_string(), token_count, speed));
                     }
-                    if chunk_data.done {
+                    if json.get("done").and_then(|v| v.as_bool()).unwrap_or(false) {
                         let elapsed = start_time.elapsed();
                         let final_speed = token_count as f64 / elapsed.as_secs_f64().max(0.001);
                         on_token(GenerationProgress::complete(token_count, &generated_text, final_speed));
